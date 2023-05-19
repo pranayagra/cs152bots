@@ -77,6 +77,9 @@ class ModBot(discord.Client):
             for channel in guild.text_channels:
                 if channel.name == f'group-{self.group_num}-mod':
                     self.mod_channels[guild.id] = channel
+
+        self.guild = self.get_guild(1103033282779676743)
+        self.category = get_category_by_name(guild, 'Project Team Channels (1-24)')    
         
 
     async def on_message(self, message):
@@ -100,6 +103,7 @@ class ModBot(discord.Client):
             reply =  "Use the `report` command to begin the reporting process.\n"
             reply += "Use the `cancel` command to cancel the report process.\n"
             reply += "Use the `match` command to match with a user.\n"
+            reply += "Use the `unmatch` command to unmatch with a user.\n"
             await message.channel.send(reply)
             return
 
@@ -107,8 +111,10 @@ class ModBot(discord.Client):
         responses = []
 
         if message.content.startswith('match'):
-            print('running match workflow...')
             await self.handle_match_command(message)
+
+        if message.content.startswith('unmatch'):
+            await self.handle_unmatch_command(message)
 
         # Only respond to messages if they're part of a reporting flow
         if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
@@ -138,6 +144,30 @@ class ModBot(discord.Client):
         scores = self.eval_text(message.content)
         await mod_channel.send(self.code_format(scores))
 
+    async def handle_unmatch_command(self, message):
+        user2_mention = message.content.split(' ')[1]
+
+        guild = self.guild
+        category = self.category
+
+        user2_id = guild.get_member_named(user2_mention).id
+
+        user1 = message.author
+        user2 = await self.fetch_user(user2_id)
+
+        name1 = user1.name
+        name2 = user2.name
+
+        if name1 <= name2: channel_name = f'match-{name1}-{name2}'
+        else: channel_name = f'match-{name2}-{name1}'  
+
+        deleted = await delete_channel_by_name(guild, channel_name) 
+        if deleted:
+            await user1.send(f"Unmatched with: {name2}")
+            await user2.send(f"Unmatched with: {name1}")
+        else:
+            await user1.send(f'Failed to unmatch with {name1}. Make sure the channel exists.')            
+
 
     async def handle_match_command(self, message):
         # Extract the mentioned user from the message
@@ -145,16 +175,9 @@ class ModBot(discord.Client):
         user2_mention = message.content.split(' ')[1]
         
         user1 = message.author
-        # user2_id = int(user2_mention)  # Extract the user ID from the mention
 
-        # Get the User object for user2
-        guild_id = 1103033282779676743
-        guild = self.get_guild(guild_id)
-
-        category = get_category_by_name(guild, 'Project Team Channels (1-24)')
-
-        await delete_channel_by_name(guild, 'match-198964576904019968-473356457929343007')
-        return
+        guild = self.guild
+        category = self.category
 
         user2_id = guild.get_member_named(user2_mention).id
         user2 = await self.fetch_user(user2_id)
