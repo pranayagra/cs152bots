@@ -34,6 +34,20 @@ def is_debug():
 def format_match_key(user1, user2):
     return f'{user1.id}_requested_{user2.id}'
 
+def get_category_by_name(guild, category_name):
+    for category in guild.categories:
+        if category.name == category_name:
+            return category
+    return None
+
+async def delete_channel_by_name(guild, channel_name):
+    channel = discord.utils.get(guild.channels, name=channel_name)
+    if channel:
+        await channel.delete()
+        return True
+    else:
+        return False
+
 class ModBot(discord.Client):
     def __init__(self): 
         intents = discord.Intents.default()
@@ -136,8 +150,17 @@ class ModBot(discord.Client):
         # Get the User object for user2
         guild_id = 1103033282779676743
         guild = self.get_guild(guild_id)
+
+        category = get_category_by_name(guild, 'Project Team Channels (1-24)')
+
+        await delete_channel_by_name(guild, 'match-198964576904019968-473356457929343007')
+        return
+
         user2_id = guild.get_member_named(user2_mention).id
         user2 = await self.fetch_user(user2_id)
+
+        name1 = user1.name
+        name2 = user2.name
 
         if not user2:
             await message.channel.send("Invalid user mentioned.")
@@ -189,8 +212,12 @@ class ModBot(discord.Client):
                 user1: discord.PermissionOverwrite(read_messages=True),
                 user2: discord.PermissionOverwrite(read_messages=True)
             }
+
+            if name1 <= name2: channel_name = f'match-{name1}-{name2}'
+            else: channel_name = f'match-{name2}-{name1}'  
+
             try:
-                channel = await guild.create_text_channel(f'match-{user1.id}-{user2.id}', overwrites=overwrites)
+                channel = await category.create_text_channel(channel_name, overwrites=overwrites)
             except:
                 print('channel failed to create')
 
