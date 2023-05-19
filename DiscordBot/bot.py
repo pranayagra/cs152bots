@@ -1,6 +1,7 @@
 # bot.py
 import discord
 from discord.ext import commands
+from discord.utils import get
 import os
 import json
 import logging
@@ -26,14 +27,23 @@ with open(token_path) as f:
     discord_token = tokens['discord']
 
 
+DEBUG = True
+def is_debug():
+    return DEBUG
+
+def format_match_key(user1, user2):
+    return f'{user1.id}_requested_{user2.id}'
+
 class ModBot(discord.Client):
     def __init__(self): 
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.members = True
         super().__init__(command_prefix='.', intents=intents)
         self.group_num = None
         self.mod_channels = {} # Map from guild to the mod channel id for that guild
         self.reports = {} # Map from user IDs to the state of their report
+        self.user_sent_user_match = set()
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
@@ -75,11 +85,16 @@ class ModBot(discord.Client):
         if message.content == Report.HELP_KEYWORD:
             reply =  "Use the `report` command to begin the reporting process.\n"
             reply += "Use the `cancel` command to cancel the report process.\n"
+            reply += "Use the `match` command to match with a user.\n"
             await message.channel.send(reply)
             return
 
         author_id = message.author.id
         responses = []
+
+        if message.content.startswith('match'):
+            print('running match workflow...')
+            await self.handle_match_command(message)
 
         # Only respond to messages if they're part of a reporting flow
         if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
@@ -109,7 +124,80 @@ class ModBot(discord.Client):
         scores = self.eval_text(message.content)
         await mod_channel.send(self.code_format(scores))
 
-    
+
+    async def handle_match_command(self, message):
+        # Extract the mentioned user from the message
+
+        user2_mention = message.content.split(' ')[1]
+        
+        user1 = message.author
+        # user2_id = int(user2_mention)  # Extract the user ID from the mention
+
+        # Get the User object for user2
+        guild_id = 1103033282779676743
+        guild = self.get_guild(guild_id)
+        user2_id = guild.get_member_named(user2_mention).id
+        user2 = await self.fetch_user(user2_id)
+
+        if not user2:
+            await message.channel.send("Invalid user mentioned.")
+            return
+
+        match_dm = f"{user1.mention} matched with you. Do you want to match back? (Y/N)"
+
+        print(f'{user1} is sending {user2} a match request!')
+
+        key_format = format_match_key(user1, user2)
+        key_reverse_format = format_match_key(user2, user1)
+
+        if key_format in self.user_sent_user_match and key_reverse_format in self.user_sent_user_match:
+            print('users already in a chat')
+
+        if is_debug(): self.user_sent_user_match.add(key_reverse_format)
+
+        self.user_sent_user_match.add(key_format)
+
+        if key_reverse_format not in self.user_sent_user_match:
+            # Send the match DM to user2
+            try:
+                match_dm_channel = await user2.create_dm()
+                await match_dm_channel.send(match_dm)
+            except discord.Forbidden:
+                await message.channel.send("I couldn't send a DM to the specified user.")
+                return
+
+            def check(m):
+                return m.author == user2 and isinstance(m.channel, discord.DMChannel)
+
+            try:
+                # Wait for user2's response
+                response = await self.wait_for('message', check=check, timeout=60.0)
+                if response.content.lower() == 'y':
+                    self.user_sent_user_match.add(key_reverse_format)
+                else:
+                    await user1.send(f"{user2.mention} declined the match.")                       
+            except asyncio.TimeoutError:
+                await user1.send("User did not respond in time.")
+
+        if key_reverse_format in self.user_sent_user_match:
+            # Create a private channel between user1 and user2
+            print(self.user_sent_user_match)
+            print('make a groupchat between users')
+
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                user1: discord.PermissionOverwrite(read_messages=True),
+                user2: discord.PermissionOverwrite(read_messages=True)
+            }
+            try:
+                channel = await guild.create_text_channel(f'match-{user1.id}-{user2.id}', overwrites=overwrites)
+            except:
+                print('channel failed to create')
+
+            await user1.send(f"A match channel has been created: {channel.mention}")
+            await user2.send(f"A match channel has been created: {channel.mention}")
+
+
     def eval_text(self, message):
         ''''
         TODO: Once you know how you want to evaluate messages in your channel, 
@@ -128,4 +216,9 @@ class ModBot(discord.Client):
 
 
 client = ModBot()
+
+# Add the new command
+# client.add_cog(match)
+
+
 client.run(discord_token)
