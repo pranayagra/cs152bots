@@ -241,12 +241,10 @@ class ModBot(discord.Client):
 
             try:
                 channel = await category.create_text_channel(channel_name, overwrites=overwrites)
+                await user1.send(f"A match channel has been created: {channel.mention}")
+                await user2.send(f"A match channel has been created: {channel.mention}")
             except:
                 print('channel failed to create')
-
-            await user1.send(f"A match channel has been created: {channel.mention}")
-            await user2.send(f"A match channel has been created: {channel.mention}")
-
 
     def eval_text(self, message):
         ''''
