@@ -1,6 +1,8 @@
 # bot.py
 import discord
+from discord import app_commands, utils
 from discord.ext import commands
+from discord.ui import Button, View
 from discord.utils import get
 import os
 import json
@@ -10,7 +12,11 @@ import requests
 from report import Report
 import pdb
 
+# from nextcord.ext import commands
+# import nextcord
+
 from utils import *
+from mod_report import *
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -28,6 +34,18 @@ with open(token_path) as f:
     tokens = json.load(f)
     discord_token = tokens['discord']
 
+class TicketOld:
+    def __init__(self, message, report_information, reported_user_information):
+        self.state = None
+        self.claimed = False
+        self.claimed_by = None
+        self.owner_message = None
+        self.communication_thread = None
+        self.logs = []
+        self.message = message
+        self.report_information = report_information
+        self.reported_user_information = reported_user_information
+
 class ModBot(discord.Client):
     def __init__(self): 
         intents = discord.Intents.default()
@@ -42,7 +60,7 @@ class ModBot(discord.Client):
     async def username_to_user(self, username):
         name = self.guild.get_member_named(username)
         if name is None: return False
-        return await self.fetch_user(name.id)
+        return await self.fetch_user(name.id)       
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
@@ -64,8 +82,8 @@ class ModBot(discord.Client):
                     self.mod_channels[guild.id] = channel
 
         self.guild = self.get_guild(1103033282779676743)
-        self.category = get_category_by_name(guild, 'Project Team Channels (1-24)')    
-        
+        self.category = get_category_by_name(guild, 'Project Team Channels (1-24)')   
+        self.mod_channel = self.mod_channels[self.guild.id] 
 
     async def on_message(self, message):
         '''
@@ -75,6 +93,9 @@ class ModBot(discord.Client):
         # Ignore messages from the bot 
         if message.author.id == self.user.id:
             return
+
+        fake_user = await self.username_to_user("ashto1")
+        await self.handle_report(None, None, fake_user)
 
         # Check if this message was sent in a server ("guild") or if it's a DM
         if message.guild:
@@ -129,8 +150,114 @@ class ModBot(discord.Client):
         scores = self.eval_text(message.content)
         await mod_channel.send(self.code_format(scores))
 
+    async def handle_report(self, report_information, reported_user_information, fake_user=None):
+        '''
+        This function is called when a report is complete. 
+        It should do something with the report information, like send it to a channel or write it to a file.
+        '''
+
+        if is_debug(): report_information = {'severity': 'High', 'user': 'user', 'reported_user': 'reported_user', 'reported_category': 'reported_category', 'reason': 'reason', 'reported_message': 'reported_message', 'reported_channel': 'reported_channel', 'reported_url': 'https://discord.com/channels/1103033282779676743/1103033285786992690/1109612952211951647'}
+        # report_information is a dictionary containing the following keys:
+        # - "severity": the severity that the user gave for reporting the other user
+        # - "user": the user who sent the report
+        # - "reported_user": the user that was reported
+        # - "reported_category": the category that the reported message was classified as
+        # - "reason": the reason that the user gave for reporting the other user
+        # - "reported_message": the message that the reported user sent
+        # - "reported_channel": the channel that the reported user sent the message in
+        # - "reported_url": a link to the reported message
+
+        if is_debug(): report_information['user'] = fake_user
+        if is_debug(): report_information['reported_user'] = fake_user
+        
+        report_information['reported_score'] = 'N/A' # reported_score: the score that the AI gave for the reported message
+
+        # reported_user_information is a dictionary containing the following keys:
+            # - "# of reports": the number of times the user has been reported
+            # - "has been warned": whether or not the user has been warned before
+            # - "last report": the last time the user was reported
+            # ???
+
+
+        ## BEGIN NEW WORKFLOW ##
+
+        unclaimed_view = UnclaimedView()
+        claimed_view = ClaimedView()
+        
+        ticket = Ticket(report_information, reported_user_information, self.mod_channel)
+        ticket.mod_thread = await self.mod_channel.create_thread(
+                name=f"mod-ticket-{ticket.reporter}-{ticket.suspect}", 
+                type=discord.ChannelType.public_thread)
+
+        ticket.main_message = await ticket.mod_thread.send(content=ticket.main_content(), view=unclaimed_view.view())
+
+        async def claim_callback(interaction: discord.Interaction):
+            if ticket.claimed: return
+
+            ticket.set_claimed(interaction.user)
+            await interaction.response.defer()
+            unclaimed_view.disable_claim_button()
+
+            if ticket.reporter_thread:
+                await ticket.reporter_thread.add_user(ticket.claimed_by)
+
+            await ticket.main_message.edit(content=ticket.main_content(), view=unclaimed_view.view())
+            ticket.claimed_webhook_message = await interaction.followup.send(content=f"Ticket Claimed!", view=claimed_view.view(), ephemeral=True)
+        
+        async def unclaim_callback(interaction: discord.Interaction):
+            if not ticket.claimed: return
+            
+            await interaction.response.defer()
+
+            unclaimed_view.enable_claim_button()
+
+            await ticket.set_unclaimed()
+            await ticket.main_message.edit(content=ticket.main_content(), view=unclaimed_view.view())
+            await interaction.followup.send(f'Ticket unclaimed by {interaction.user}.')       
+
+        async def suspend_callback(interaction: discord.Interaction):
+            if not ticket.claimed: return
+
+            await interaction.response.defer()
+
+            await ticket.set_unclaimed(state = TicketState.REPORT_COMPLETE)
+            await interaction.followup.send(f'Reported user suspended by {interaction.user}.')
+            await ticket.reporter.send(f'Your report against {ticket.suspect} has resulted in them being suspended.')
+            await ticket.suspect.send(f'You have been suspended for {ticket.report_information["reason"]}.')
+
+        async def false_report_callback(interaction: discord.Interaction):
+            if not ticket.claimed: return
+
+            await interaction.response.defer()
+            
+            await ticket.set_unclaimed(state = TicketState.REPORT_COMPLETE)
+            await interaction.followup.send(f'Ticket marked as false report by {interaction.user}.')         
+
+        async def create_thread_callback(interaction: discord.Interaction):
+            if not ticket.claimed or ticket.reporter_thread: return
+
+            await interaction.response.defer()
+
+            ticket.reporter_thread = await self.mod_channel.create_thread(
+                name=f"reporter-ticket-{ticket.reporter}-{ticket.suspect}", 
+                type=discord.ChannelType.private_thread,
+                invitable=True
+            )
+            await ticket.reporter_thread.add_user(ticket.reporter)
+            await ticket.reporter_thread.add_user(ticket.claimed_by)
+
+            claimed_view.disable_create_thread_button()
+            ticket.claimed_webhook_message = await ticket.claimed_webhook_message.edit(view=claimed_view.view())
+            await interaction.followup.send(f'Created private thread with reporter.')
+
+        unclaimed_view.claim_button.callback = claim_callback
+        claimed_view.set_callbacks(suspend_callback, false_report_callback, create_thread_callback, unclaim_callback)
+
+        ## END NEW WORKFLOW ## 
+
     async def handle_unmatch_command(self, message):
-        user2_mention = message.content.split(' ')[1]
+
+        user2_mention = message.content.split(' ')[1]        
 
         guild = self.guild
         category = self.category
@@ -183,6 +310,9 @@ class ModBot(discord.Client):
                 await user1.send(f'Sent match request to {user2_mention}. A match will be created if {user2_mention} accepts.')
             except discord.Forbidden:
                 if await check_issue(True, user1.send, f"Could not send a DM to {user2_mention}."): return
+
+            def check_DM(m):
+                return m.author == user2 and isinstance(m.channel, discord.DMChannel)
 
             try:
                 response = await self.wait_for('message', check=check_DM, timeout=120.0)

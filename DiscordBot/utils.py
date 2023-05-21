@@ -107,6 +107,7 @@ async def delete_channel(guild, channel_name):
     else:
         return False
 
+# does not work right now
+# def check_DM(m):
+    # return m.author == user2 and isinstance(m.channel, discord.DMChannel)
 
-def check_DM(m):
-    return m.author == user2 and isinstance(m.channel, discord.DMChannel)
