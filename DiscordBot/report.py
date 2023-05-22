@@ -29,6 +29,7 @@ class Report:
         self.reason = []
         self.log = {}
         self.read_user_information()
+        self.cancel = False
     
     def read_user_information(self):
         if os.path.exists('reported_user_info.pkl'):
@@ -79,6 +80,7 @@ class Report:
 
         if message.content == self.CANCEL_KEYWORD:
             self.state = State.REPORT_COMPLETE
+            self.cancel = True
             return ["Report cancelled."]
         
         if self.state == State.REPORT_START:
