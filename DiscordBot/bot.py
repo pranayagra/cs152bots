@@ -35,18 +35,6 @@ with open(token_path) as f:
     tokens = json.load(f)
     discord_token = tokens['discord']
 
-class TicketOld:
-    def __init__(self, message, report_information, reported_user_information):
-        self.state = None
-        self.claimed = False
-        self.claimed_by = None
-        self.owner_message = None
-        self.communication_thread = None
-        self.logs = []
-        self.message = message
-        self.report_information = report_information
-        self.reported_user_information = reported_user_information
-
 class ModBot(discord.Client):
     def __init__(self): 
         intents = discord.Intents.default()
@@ -90,6 +78,12 @@ class ModBot(discord.Client):
         self.mod_channel = self.mod_channels[self.guild.id] 
         self.main_channel = self.main_channels[self.guild.id]
 
+        if is_debug(): 
+            for thread in self.mod_channel.threads:
+                await thread.delete()
+            # for thread in self.main_channel.threads:
+            #     await thread.delete()
+
     async def on_message(self, message):
         '''
         This function is called whenever a message is sent in a channel that the bot can see (including DMs). 
@@ -127,6 +121,9 @@ class ModBot(discord.Client):
         if message.content.startswith('unmatch'):
             await self.handle_unmatch_command(message)
 
+        if is_debug() and message.content.startswith('dreport'):
+            await self.handle_report(None, None, message.author)
+
         # Only respond to messages if they're part of a reporting flow
         if author_id not in self.reports and not message.content.startswith(Report.START_KEYWORD):
             return
@@ -146,7 +143,7 @@ class ModBot(discord.Client):
                 report_information = self.reports[author_id].log
                 reported_user_information = self.reports[author_id].reported_user_information
                 # pdb.set_trace()
-                self.handle_report(report_information, reported_user_information)
+                await self.handle_report(report_information, reported_user_information)
             self.reports.pop(author_id)
 
     async def handle_channel_message(self, message):
@@ -161,200 +158,18 @@ class ModBot(discord.Client):
         await mod_channel.send(self.code_format(scores))
 
     async def handle_report(self, report_information, reported_user_information, fake_user=None):
-        '''
-        This function is called when a report is complete. 
-        It should do something with the report information, like send it to a channel or write it to a file.
-        '''
-
-        if is_debug(): report_information = {'severity': 'High', 'user': 'user', 'reported_user': 'reported_user', 'reported_category': 'reported_category', 'reason': 'reason', 'reported_message': 'reported_message', 'reported_channel': 'reported_channel', 'reported_url': 'https://discord.com/channels/1103033282779676743/1103033285786992690/1109612952211951647'}
-        # report_information is a dictionary containing the following keys:
-        # - "severity": the severity that the user gave for reporting the other user
-        # - "user": the user who sent the report
-        # - "reported_user": the user that was reported
-        # - "reported_category": the category that the reported message was classified as
-        # - "reason": the reason that the user gave for reporting the other user
-        # - "reported_message": the message that the reported user sent
-        # - "reported_channel": the channel that the reported user sent the message in
-        # - "reported_url": a link to the reported message
-
-        if is_debug(): report_information['user'] = fake_user
-        if is_debug(): report_information['reported_user'] = fake_user
         
-        report_information['reported_score'] = 'N/A' # reported_score: the score that the AI gave for the reported message
-
-        # reported_user_information is a dictionary containing the following keys:
-            # - "# of reports": the number of times the user has been reported
-            # - "has been warned": whether or not the user has been warned before
-            # - "last report": the last time the user was reported
-            # ???
-
-        ## BEGIN NEW WORKFLOW ##
-
-        unclaimed_view = UnclaimedView()
-        claimed_view = ClaimedView()
+        if is_debug(): report_information, reported_user_information = encode_fake_information(report_information, reported_user_information, fake_user)
         
-        ticket = Ticket(report_information, reported_user_information, self.mod_channel)
-        ticket.mod_thread = await self.mod_channel.create_thread(
-                name=f"mod-ticket-{ticket.reporter}-{ticket.suspect}", 
-                type=discord.ChannelType.public_thread)
+        report_information['reported_score'] = 'N/A'
 
-        ticket.main_message = await ticket.mod_thread.send(content=ticket.main_content(), view=unclaimed_view.view())
-
-        async def claim_callback(interaction: discord.Interaction):
-            if ticket.claimed: return
-
-            ticket.set_claimed(interaction.user)
-            await interaction.response.defer()
-            unclaimed_view.disable_claim_button()
-
-            if ticket.reporter_thread:
-                await ticket.reporter_thread.add_user(ticket.claimed_by)
-
-            await ticket.main_message.edit(content=ticket.main_content(), view=unclaimed_view.view())
-            ticket.claimed_webhook_message = await interaction.followup.send(content=f"Ticket Claimed!", view=claimed_view.view(), ephemeral=True)
-        
-        async def unclaim_callback(interaction: discord.Interaction):
-            if not ticket.claimed: return
-            
-            await interaction.response.defer()
-
-            unclaimed_view.enable_claim_button()
-
-            await ticket.set_unclaimed()
-            await ticket.main_message.edit(content=ticket.main_content(), view=unclaimed_view.view())
-            await interaction.followup.send(f'Ticket unclaimed by {interaction.user}.')       
-
-        async def suspend_callback(interaction: discord.Interaction):
-            if not ticket.claimed: return
-
-            await interaction.response.defer()
-
-            await ticket.set_unclaimed(state = TicketState.REPORT_COMPLETE)
-            await interaction.followup.send(f'Reported user suspended by {interaction.user}.')
-            await ticket.reporter.send(f'Your report against {ticket.suspect} has resulted in them being suspended.')
-            await ticket.suspect.send(f'You have been suspended for {ticket.report_information["reason"]}.')
-
-        async def false_report_callback(interaction: discord.Interaction):
-            if not ticket.claimed: return
-
-            await interaction.response.defer()
-            
-            await ticket.set_unclaimed(state = TicketState.REPORT_COMPLETE)
-            await interaction.followup.send(f'Ticket marked as false report by {interaction.user}.')         
-
-        async def create_thread_callback(interaction: discord.Interaction):
-            if not ticket.claimed or ticket.reporter_thread: return
-
-            await interaction.response.defer()
-
-            ticket.reporter_thread = await self.mod_channel.create_thread(
-                name=f"reporter-ticket-{ticket.reporter}-{ticket.suspect}", 
-                type=discord.ChannelType.private_thread,
-                invitable=True
-            )
-            await ticket.reporter_thread.add_user(ticket.reporter)
-            await ticket.reporter_thread.add_user(ticket.claimed_by)
-
-            claimed_view.disable_create_thread_button()
-            ticket.claimed_webhook_message = await ticket.claimed_webhook_message.edit(view=claimed_view.view())
-            await interaction.followup.send(f'Created private thread with reporter.')
-
-        unclaimed_view.claim_button.callback = claim_callback
-        claimed_view.set_callbacks(suspend_callback, false_report_callback, create_thread_callback, unclaim_callback)
-
-        ## END NEW WORKFLOW ## 
+        await handle_report_helper(report_information, reported_user_information, client)
 
     async def handle_unmatch_command(self, message):
-
-        user2_mention = message.content.split(' ')[1]        
-
-        guild = self.guild
-        category = self.category
-
-        user1 = message.author
-        user2 = await self.username_to_user(user2_mention)
-
-        if await check_issue(not user2, user1.send, f"Could not find {user2_mention}."): return
-        if await check_issue(user1 == user2, user1.send, "You cannot unmatch with yourself."): return
-        if await check_issue(not self.matches.is_match(user1, user2), f'No match with {user2}.'): return        
-
-        channel_name = self.matches.get_match_channel_name(user1, user2)
-
-        if await delete_channel(guild, channel_name):
-            await user1.send(f"Unmatched with: {user2}")
-            await user2.send(f"Unmatched with: {user1}")
-        else:
-            await user1.send(f'Failed to unmatch with {user2}.')          
-
+        await handle_unmatch_command_helper(message, self)      
 
     async def handle_match_command(self, message):
-        # Extract the mentioned user from the message
-        
-        user2_mention = message.content.split(' ')[1]
-
-        guild = self.guild
-        category = self.category
-
-        user1 = message.author
-        user2 = await self.username_to_user(user2_mention)
-
-        if await check_issue(not user2, user1.send, f"Could not find {user2_mention}."): return
-        if await check_issue(user1 == user2, user1.send, "You cannot match with yourself."): return
-
-        # check if user1 is already matched with user2 or has already sent a match request to user2
-        if await check_issue(self.matches.is_match(user1, user2), user1.send, f'You are already matched with {user2_mention}.'): return
-        if await check_issue(self.matches.is_match_request(user1, user2), user1.send, f'You have already sent a match request to {user2_mention}.'): return
-
-        if is_debug() and False: self.matches.add_match_request(user2, user1)
-
-        self.matches.add_match_request(user1, user2)
-
-        # if user2 has not already sent user1 a match request, send a match request to user2
-        if not self.matches.is_match_request(user2, user1):
-            request_view = RequestView()
-            match_dm = f"{user1} wants to match with you. Do you want to match back?"
-            try:
-                message = await user2.send(content=match_dm, view=request_view.view())
-                await user1.send(f'Sent match request to {user2_mention}. A match will be created if {user2_mention} accepts.')
-            except:
-                if await check_issue(True, user1.send, f"Could not send a DM to {user2_mention}."): return
-
-            async def accept_callback(interaction: discord.Interaction):
-                accept_view = AcceptView()
-                
-                await interaction.response.defer()
-                await message.edit(content=match_dm, view=accept_view.view())
-                if not self.matches.is_match(user1, user2):
-                    self.matches.add_match_request(user2, user1)
-                    await self.handle_match(user1, user2)
-
-            async def decline_callback(interaction: discord.Interaction):
-                decline_view = DeclineView()
-                await interaction.response.defer()
-                await message.edit(content=match_dm, view=decline_view.view())
-
-            request_view.accept_button.callback = accept_callback
-            request_view.decline_button.callback = decline_callback
-
-        if self.matches.is_match(user1, user2):
-            await self.handle_match(user1, user2)
-
-    async def handle_match(self, user1, user2):
-        match_information = self.matches.get_match(user1, user2)
-        try:
-
-            match_thread = await self.main_channel.create_thread(
-                name=f"match-{match_information.user1}-{match_information.user2}", 
-                type=discord.ChannelType.private_thread,
-                invitable=False
-            )
-            await match_thread.add_user(match_information.user1)
-            await match_thread.add_user(match_information.user2)
-
-            await match_information.user1.send(f"Matched with {match_information.user2}! Chat: {match_thread.mention}")
-            await match_information.user2.send(f"Matched with {match_information.user1}! Chat: {match_thread.mention}")
-        except Exception as e:
-            print("Failed to create channel: ", e)
+        await handle_match_command_helper(message, self)
 
     def eval_text(self, message):
         ''''

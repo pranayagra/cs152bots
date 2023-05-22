@@ -93,17 +93,19 @@ class Report:
         
         if self.state == State.AWAITING_MESSAGE:
             # Parse out the three ID strings from the message link
-            m = re.search('/(\d+)/(\d+)/(\d+)', message.content)
+            link = message.content
+            m = re.search('/(\d+)/(\d+)/(\d+)', link)
             if not m:
                 return ["I'm sorry, I couldn't read that link. Please try again or say `cancel` to cancel."]
             guild = self.client.get_guild(int(m.group(1)))
             if not guild:
                 return ["I cannot accept reports of messages from guilds that I'm not in. Please have the guild owner add me to the guild and try again."]
-            channel = guild.get_channel(int(m.group(2)))
-            if not channel:
-                return ["It seems this channel was deleted or never existed. Please try again or say `cancel` to cancel."]
+            
+            thread = self.client.main_channel.get_thread(int(m.group(2)))
+            if not thread:
+                return ["It seems this thread was deleted or never existed. Please try again or say `cancel` to cancel."]
             try:
-                message = await channel.fetch_message(int(m.group(3)))
+                message = await thread.fetch_message(int(m.group(3)))
             except discord.errors.NotFound:
                 return ["It seems this message was deleted or never existed. Please try again or say `cancel` to cancel."]
 
@@ -112,11 +114,9 @@ class Report:
             reply = ["I found this message:", "```" + message.author.name + ": " + message.content + "```", \
                     "Please select the reason for reporting this user/this message(1-5): \n"]
             self.log['reported_user'] = message.author
-            # self.log['content'] = message.content
             self.log['reported_message'] = message.content
-            self.log['reported_channel'] = message.channel
-            self.log['reported_url'] = message
-            # import pdb; pdb.set_trace()
+            self.log['reported_thread'] = thread.name
+            self.log['reported_url'] = link
             self.log['severity'] = 'Medium'
             for i, reason in enumerate(self.report_type):
                 reply[-1] += (str(i+1) + '. '+ reason+'\n')
@@ -187,7 +187,7 @@ class Report:
         return []
 
     def record_and_complete(self):
-        print(self.log['reported_user'].id, type(self.log['reported_user'].id))
+        # print(self.log['reported_user'].id, type(self.log['reported_user'].id))
         if self.log['reported_user'].id not in self.reported_user_information:
             self.reported_user_information[self.log['reported_user'].id] = {}
             self.reported_user_information[self.log['reported_user'].id]['num_report'] = 0
