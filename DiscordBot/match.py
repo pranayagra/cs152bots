@@ -159,11 +159,14 @@ async def handle_match_command_helper(message, client):
     if await check_issue(len(data) < 2, message.author.send, "Please mention a user to match with."): return
     user2_mention = data[1]
 
-    guild = client.guild
-    category = client.category
-
     user1 = message.author
     user2 = await client.username_to_user(user2_mention)
+    
+    try:
+        state = client.bad_users[user1.id]['state']
+        if await check_issue(state.startswith('suspended'), user1.send, f"You are suspended"): return
+    except:
+        pass
 
     if await check_issue(not user2, user1.send, f"Could not find {user2_mention}."): return
     if await check_issue(user1 == user2, user1.send, "You cannot match with yourself."): return

@@ -6,6 +6,36 @@ import os.path
 from datetime import date
 import pickle as pkl
 
+# class PersistentInformation:
+#     def __init__(self):
+#         self.all_report_information = {}
+
+#     def add_ticket(self, suspect, ticket_id, ticket_information):
+#         if suspect.id not in self.all_report_information:
+#             self.all_report_information[suspect.id] = {}
+        
+#         suspect_report_information = self.all_report_information[suspect.id]
+
+#         if ticket_id not in suspect_report_information:
+#             suspect_report_information[ticket_id] = {}
+        
+#         suspect_ticket_information = suspect_report_information[ticket_id]
+
+#         suspect_ticket_information['reporter'] = ticket_information['reporter']
+#         suspect_ticket_information['reason'] = ticket_information['reason']
+#         suspect_ticket_information['state'] = ticket_information['state']
+#         suspect_ticket_information['date'] = ticket_information['date']
+#         suspect_ticket_information['mod_action'] = ticket_information['mod_action']
+#         suspect_ticket_information['appeal'] = ticket_information['appeal']
+
+#     def num_reports(self, suspect):
+#         if suspect.id not in self.all_report_information:
+#             return 0
+#         return len(self.all_report_information[suspect.id])
+
+#     # user.id => {ticket.id: {}, ticket.id: {}}
+#     def save_user_information(self, user_id, user_name, user_discriminator, user_avatar):
+
 class State(Enum):
     REPORT_START = auto()
     AWAITING_MESSAGE = auto()
@@ -16,8 +46,6 @@ class Report:
     START_KEYWORD = "report"
     CANCEL_KEYWORD = "cancel"
     HELP_KEYWORD = "help"
-
-    
 
     def __init__(self, client):
         self.state = State.REPORT_START
@@ -118,6 +146,7 @@ class Report:
             self.log['reported_thread'] = thread.name
             self.log['reported_url'] = link
             self.log['severity'] = 'Medium'
+            # self.log['thread_id'] = thread.id
             for i, reason in enumerate(self.report_type):
                 reply[-1] += (str(i+1) + '. '+ reason+'\n')
             return reply
@@ -191,11 +220,13 @@ class Report:
         if self.log['reported_user'].id not in self.reported_user_information:
             self.reported_user_information[self.log['reported_user'].id] = {}
             self.reported_user_information[self.log['reported_user'].id]['num_report'] = 0
-            self.reported_user_information[self.log['reported_user'].id]['warned'] =0
+            self.reported_user_information[self.log['reported_user'].id]['warned'] = 0
         self.reported_user_information[self.log['reported_user'].id]['last_report'] = None
         self.reported_user_information[self.log['reported_user'].id]['num_report'] +=1
         self.reported_user_information[self.log['reported_user'].id]['warned'] +=1
         self.reported_user_information[self.log['reported_user'].id]['last_report'] = date.today()
+
+        print(self.reported_user_information)
         with open('reported_user_info.pkl', 'wb') as handle:
             pkl.dump(self.reported_user_information, handle)
         # np.save('reported_user_info.npy', self.reported_user_information)

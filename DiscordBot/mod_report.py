@@ -6,7 +6,6 @@ from discord.utils import get
 from enum import Enum, auto
 from utils import *
 
-
 class UnclaimedView:
     def __init__(self):
         self.claim_button = Button(style=discord.ButtonStyle.green, label='Claim')
@@ -25,6 +24,7 @@ class UnclaimedView:
 class ClaimedView:
     def __init__(self):
         suspend_button = Button(style=discord.ButtonStyle.red, label='Suspend Reported User')
+        # warn_button = Button(style=discord.ButtonStyle.red, label='Warn Reported User')
         false_report_button = Button(style=discord.ButtonStyle.red, label='False Report')
         create_thread_button = Button(style=discord.ButtonStyle.blurple, label='Create Reporter Thread')
         unclaim_button = Button(style=discord.ButtonStyle.gray, label='Unclaim Ticket')
@@ -47,6 +47,14 @@ class ClaimedView:
         self.owner_buttons[1].callback = false_report_callback
         self.owner_buttons[2].callback = create_thread_callback
         self.owner_buttons[3].callback = unclaim_callback
+
+
+class TicketAction(Enum):
+    FALSE_REPORT = auto()
+    WARN_USER = auto()
+    BAN_USER = auto()
+    TBD = auto()
+
 
 class TicketState(Enum):
     REPORT_UNCLAIMED = auto()
@@ -73,9 +81,13 @@ class Ticket:
         
         self.mod_thread_name = f"mod-ticket-{self.reporter}-{self.suspect}"
         self.mod_thread = None
+        self.mod_thread_id = None
 
         self.reporter_thread_name = f"reporter-ticket-{self.reporter}-{self.suspect}"
         self.reporter_thread = None
+
+        self.mod_action = TicketAction.TBD
+        self.appeal_status = None # not used currently
 
     def set_claimed(self, claimed_by, state = TicketState.REPORT_CLAIMED):
         self.claimed = True
@@ -111,14 +123,21 @@ class Ticket:
             name=self.mod_thread_name, 
             type=discord.ChannelType.public_thread
             )
+        self.mod_thread_id = self.mod_thread.id
 
     async def create_reporter_thread(self, client):
         self.reporter_thread = await client.main_channel.create_thread(
             name=self.reporter_thread_name, 
-            type=discord.ChannelType.public_thread
+            type=discord.ChannelType.private_thread
             )        
         await self.reporter_thread.add_user(self.reporter)   
         await self.reporter_thread.add_user(self.claimed_by) 
+
+    def save_ticket_to_file(self):
+        suspect = self.suspect 
+        ticket_id = self.ticket_id
+        filename = None
+        
 
 def new_report_prepend():
     return f'New report ticket! Click the Claim button to claim the ticket.\n'
@@ -141,12 +160,12 @@ def format_ticket_message(report_information):
     **AI Score**: {report_information['reported_score']}
     """
 
-def format_reported_user_information(reported_user_information):
-    prepend = f'**REPORT HISTORY {reported_user_information["reported_user"].mention}**\n'
+def format_reported_user_information(suspect, reported_user_information):
+    prepend = f'**REPORT HISTORY {suspect.mention}**\n'
     body = f"""
-    **Suspect**: {reported_user_information['reported_user']}
-    **Number of Reports**: {reported_user_information['number_of_reports']}
-    **Has Been Warned**: {reported_user_information['has_been_warning']}
+    **Suspect**: {suspect}
+    **Number of Reports**: {reported_user_information['num_report']}
+    **Has Been Warned**: {reported_user_information['warned'] > 0}
     **Last Report**: {reported_user_information['last_report']}
     """
     return f'{prepend}{body}'
@@ -160,7 +179,7 @@ async def handle_report_helper(report_information, reported_user_information, cl
 
     ticket.main_message = await ticket.mod_thread.send(content=ticket.main_content(), view=unclaimed_view.view())
 
-    await ticket.mod_thread.send(content=format_reported_user_information(reported_user_information))
+    await ticket.mod_thread.send(content=format_reported_user_information(ticket.suspect, reported_user_information))
 
     async def claim_callback(interaction: discord.Interaction):
         if ticket.claimed: return
@@ -191,17 +210,34 @@ async def handle_report_helper(report_information, reported_user_information, cl
         if not ticket.claimed: return
 
         await interaction.response.defer()
-
+        ticket.set_action = TicketAction.BAN_USER
         await ticket.set_unclaimed(state = TicketState.REPORT_COMPLETE)
         await interaction.followup.send(f'Reported user suspended by {interaction.user}.')
         await ticket.reporter.send(f'Your report against {ticket.suspect} has resulted in them being suspended.')
-        await ticket.suspect.send(f'You have been suspended for {ticket.report_information["reason"]}.')        
+        await ticket.suspect.send(f'You have been suspended for {ticket.report_information["reason"]}. If this is a mistake, please type `appeal {ticket.mod_thread_id}`.')
+
+        # delete user from all their threads
+        if ticket.suspect.id not in client.bad_users:
+            client.bad_users[ticket.suspect.id] = {}
+        bad_user = client.bad_users[ticket.suspect.id]
+        bad_user[ticket.mod_thread_id] = ticket
+        bad_user['state'] = 'suspended'
+
+        for thread in client.main_channel.threads:
+            try:
+                await thread.fetch_member(ticket.suspect.id)
+                if thread.name.startswith('appeal-'): continue
+                await thread.edit(locked=True)
+                await thread.send(f'User {ticket.suspect.mention} has been suspended.')
+            except:
+                pass
+
 
     async def false_report_callback(interaction: discord.Interaction):
         if not ticket.claimed: return
 
         await interaction.response.defer()
-        
+        ticket.set_action = TicketAction.FALSE_REPORT
         await ticket.set_unclaimed(state = TicketState.REPORT_COMPLETE)
         await interaction.followup.send(f'Ticket marked as false report by {interaction.user}.')             
 
@@ -230,11 +266,11 @@ def encode_fake_information(report_information, reported_user_information, fake_
                 'reported_thread': None,
                 'reported_url': 'https://discord.com/channels/1103033282779676743/1110074710999445534/1110074729659904050',
         }
-    if not reported_user_information and is_debug():
+
+    if True or not reported_user_information and is_debug():
         reported_user_information = {
-            'reported_user': fake_user,
-            'number_of_reports': 1,
-            'has_been_warning': False,
+            'num_report': 1,
+            'warned': 2,
             'last_report': None,
         }
     return report_information, reported_user_information

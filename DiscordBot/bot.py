@@ -1,4 +1,3 @@
-# bot.py
 import discord
 from discord import app_commands, utils
 from discord.ext import commands
@@ -11,13 +10,13 @@ import re
 import requests
 from report import Report
 import pdb
+from enum import Enum, auto
 
-# from nextcord.ext import commands
-# import nextcord
 
 from utils import *
 from mod_report import *
 from match import *
+from appeal_report import *
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -35,6 +34,32 @@ with open(token_path) as f:
     tokens = json.load(f)
     discord_token = tokens['discord']
 
+
+
+# class BadUserState(Enum):
+#     SUSPEND = auto()
+#     WARN = auto()
+#     REPORT_COMPLETE = auto()
+#     REPORT_APPEAL = auto()
+
+# class BadUser:
+#     def __init__(self, state):
+#         self.reports = {}
+#         self.state = state
+
+#     def add_ticket(self, ticket_id, ticket):
+#         self.reports[ticket_id] = ticket
+
+#     def warn(self):
+#         self.state = BadUserState.WARN
+
+#     def suspend(self):
+#         self.state = BadUserState.SUSPENDED
+    
+#     def can_appeal(self):
+        
+
+
 class ModBot(discord.Client):
     def __init__(self): 
         intents = discord.Intents.default()
@@ -46,6 +71,8 @@ class ModBot(discord.Client):
         self.main_channels = {}
         self.reports = {} # Map from user IDs to the state of their report
         self.matches = Match()
+        self.bad_users = {}
+        self.appealed_tickets = set()
 
     async def username_to_user(self, username):
         name = self.guild.get_member_named(username)
@@ -78,9 +105,9 @@ class ModBot(discord.Client):
         self.mod_channel = self.mod_channels[self.guild.id] 
         self.main_channel = self.main_channels[self.guild.id]
 
-        if is_debug(): 
-            for thread in self.mod_channel.threads:
-                await thread.delete()
+        if is_debug(): pass
+            # for thread in self.mod_channel.threads:
+            #     await thread.delete()
             # for thread in self.main_channel.threads:
             #     await thread.delete()
 
@@ -107,8 +134,9 @@ class ModBot(discord.Client):
         if message.content == Report.HELP_KEYWORD:
             reply =  "Use the `report` command to begin the reporting process.\n"
             reply += "Use the `cancel` command to cancel the report process.\n"
-            reply += "Use the `match` command to match with a user.\n"
-            reply += "Use the `unmatch` command to unmatch with a user.\n"
+            reply += "Use the `match <user>` command to match with a user.\n"
+            reply += "Use the `unmatch <user>` command to unmatch with a user.\n"
+            reply += "Use the `appeal <id>` command to appeal a ticket report.\n"
             await message.channel.send(reply)
             return
 
@@ -120,6 +148,9 @@ class ModBot(discord.Client):
 
         if message.content.startswith('unmatch'):
             await self.handle_unmatch_command(message)
+
+        if message.content.startswith('appeal'):
+            await self.handle_appeal_command(message)
 
         if is_debug() and message.content.startswith('dreport'):
             await self.handle_report(None, None, message.author)
@@ -152,10 +183,9 @@ class ModBot(discord.Client):
             return
 
         # Forward the message to the mod channel
-        mod_channel = self.mod_channels[message.guild.id]
-        await mod_channel.send(f'Forwarded message:\n{message.author.name}: "{message.content}"')
+        await self.mod_channel.send(f'Forwarded message:\n{message.author.name}: "{message.content}"')
         scores = self.eval_text(message.content)
-        await mod_channel.send(self.code_format(scores))
+        await self.mod_channel.send(self.code_format(scores))
 
     async def handle_report(self, report_information, reported_user_information, fake_user=None):
         
@@ -170,6 +200,9 @@ class ModBot(discord.Client):
 
     async def handle_match_command(self, message):
         await handle_match_command_helper(message, self)
+
+    async def handle_appeal_command(self, message):
+        await handle_appeal_command_helper(message, self)
 
     def eval_text(self, message):
         ''''
