@@ -25,7 +25,7 @@ class ClaimedView:
     def __init__(self):
         suspend_button = Button(style=discord.ButtonStyle.red, label='Suspend Reported User')
         false_report_button = Button(style=discord.ButtonStyle.red, label='False Report')
-        create_thread_button = Button(style=discord.ButtonStyle.blue, label='Create Reporter Thread')
+        create_thread_button = Button(style=discord.ButtonStyle.red, label='Create Reporter Thread')
         unclaim_button = Button(style=discord.ButtonStyle.gray, label='Unclaim Ticket')
         self.owner_buttons = [suspend_button, false_report_button, create_thread_button, unclaim_button]   
 
