@@ -17,6 +17,7 @@ import pdb
 
 from utils import *
 from mod_report import *
+from match import *
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -54,6 +55,7 @@ class ModBot(discord.Client):
         super().__init__(command_prefix='.', intents=intents)
         self.group_num = None
         self.mod_channels = {} # Map from guild to the mod channel id for that guild
+        self.main_channels = {}
         self.reports = {} # Map from user IDs to the state of their report
         self.matches = Match()
 
@@ -80,10 +82,13 @@ class ModBot(discord.Client):
             for channel in guild.text_channels:
                 if channel.name == f'group-{self.group_num}-mod':
                     self.mod_channels[guild.id] = channel
+                elif channel.name == f'group-{self.group_num}':
+                    self.main_channels[guild.id] = channel
 
         self.guild = self.get_guild(1103033282779676743)
         self.category = get_category_by_name(guild, 'Project Team Channels (1-24)')   
         self.mod_channel = self.mod_channels[self.guild.id] 
+        self.main_channel = self.main_channels[self.guild.id]
 
     async def on_message(self, message):
         '''
@@ -95,7 +100,7 @@ class ModBot(discord.Client):
             return
 
         fake_user = await self.username_to_user("ashto1")
-        await self.handle_report(None, None, fake_user)
+        # await self.handle_report(None, None, fake_user)
 
         # Check if this message was sent in a server ("guild") or if it's a DM
         if message.guild:
@@ -177,7 +182,6 @@ class ModBot(discord.Client):
             # - "has been warned": whether or not the user has been warned before
             # - "last report": the last time the user was reported
             # ???
-
 
         ## BEGIN NEW WORKFLOW ##
 
@@ -286,8 +290,6 @@ class ModBot(discord.Client):
         guild = self.guild
         category = self.category
 
-        # await delete_channel(guild, 'match-198964576904019968-473356457929343007')
-
         user1 = message.author
         user2 = await self.username_to_user(user2_mention)
 
@@ -298,82 +300,56 @@ class ModBot(discord.Client):
         if await check_issue(self.matches.is_match(user1, user2), user1.send, f'You are already matched with {user2_mention}.'): return
         if await check_issue(self.matches.is_match_request(user1, user2), user1.send, f'You have already sent a match request to {user2_mention}.'): return
 
-        if is_debug(): self.matches.add_match_request(user2, user1)
+        if is_debug() and False: self.matches.add_match_request(user2, user1)
 
         self.matches.add_match_request(user1, user2)
 
         # if user2 has not already sent user1 a match request, send a match request to user2
         if not self.matches.is_match_request(user2, user1):
+            request_view = RequestView()
+            match_dm = f"{user1} wants to match with you. Do you want to match back?"
             try:
-                match_dm = f"{user1} wants to match with you. Do you want to match back? (Y/N)"
-                await user2.send(match_dm)
+                message = await user2.send(content=match_dm, view=request_view.view())
                 await user1.send(f'Sent match request to {user2_mention}. A match will be created if {user2_mention} accepts.')
-            except discord.Forbidden:
+            except:
                 if await check_issue(True, user1.send, f"Could not send a DM to {user2_mention}."): return
 
-            def check_DM(m):
-                return m.author == user2 and isinstance(m.channel, discord.DMChannel)
-
-            try:
-                response = await self.wait_for('message', check=check_DM, timeout=120.0)
-                if response.content.lower() == 'y':
-                    self.matches.add_match_request(user2, user1)
-            except: 
-                pass
-
-        # both parties have matched, create a channel for them
-        if self.matches.is_match(user1, user2):
-            match_information = self.matches.get_match(user1, user2)
-            try:
-                channel = await match_information.create_text_channel(self.user, guild, category)
-                await user1.send(f"A match channel has been created: {channel.mention}")
-                await user2.send(f"A match channel has been created: {channel.mention}")
-            except Exception as ee:
-                print("Failed to create channel: ", ee)
+            async def accept_callback(interaction: discord.Interaction):
+                accept_view = AcceptView()
                 
+                await interaction.response.defer()
+                await message.edit(content=match_dm, view=accept_view.view())
+                if not self.matches.is_match(user1, user2):
+                    self.matches.add_match_request(user2, user1)
+                    await self.handle_match(user1, user2)
 
-        # if key_reverse_format not in self.user_sent_user_match:
-        #     # Send the match DM to user2
-        #     try:
-        #         match_dm_channel = await user2.create_dm()
-        #         await match_dm_channel.send(match_dm)
-        #     except discord.Forbidden:
-        #         await message.channel.send("I couldn't send a DM to the specified user.")
-        #         return
+            async def decline_callback(interaction: discord.Interaction):
+                decline_view = DeclineView()
+                await interaction.response.defer()
+                await message.edit(content=match_dm, view=decline_view.view())
 
-        #     def check(m):
-        #         return m.author == user2 and isinstance(m.channel, discord.DMChannel)
+            request_view.accept_button.callback = accept_callback
+            request_view.decline_button.callback = decline_callback
 
-        #     try:
-        #         # Wait for user2's response
-        #         response = await self.wait_for('message', check=check, timeout=60.0)
-        #         if response.content.lower() == 'y':
-        #             self.user_sent_user_match.add(key_reverse_format)
-        #         else:
-        #             await user1.send(f"{user2.mention} declined the match.")                       
-        #     except asyncio.TimeoutError:
-        #         await user1.send("User did not respond in time.")
+        if self.matches.is_match(user1, user2):
+            await self.handle_match(user1, user2)
 
-        # if key_reverse_format in self.user_sent_user_match:
-        #     # Create a private channel between user1 and user2
-        #     print(self.user_sent_user_match)
-        #     print('make a groupchat between users')
+    async def handle_match(self, user1, user2):
+        match_information = self.matches.get_match(user1, user2)
+        try:
 
-        #     overwrites = {
-        #         guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        #         user1: discord.PermissionOverwrite(read_messages=True),
-        #         user2: discord.PermissionOverwrite(read_messages=True)
-        #     }
+            match_thread = await self.main_channel.create_thread(
+                name=f"match-{match_information.user1}-{match_information.user2}", 
+                type=discord.ChannelType.private_thread,
+                invitable=False
+            )
+            await match_thread.add_user(match_information.user1)
+            await match_thread.add_user(match_information.user2)
 
-        #     if name1 <= name2: channel_name = f'match-{name1}-{name2}'
-        #     else: channel_name = f'match-{name2}-{name1}'  
-
-        #     try:
-        #         channel = await category.create_text_channel(channel_name, overwrites=overwrites)
-        #         await user1.send(f"A match channel has been created: {channel.mention}")
-        #         await user2.send(f"A match channel has been created: {channel.mention}")
-        #     except:
-        #         print('channel failed to create')
+            await match_information.user1.send(f"Matched with {match_information.user2}! Chat: {match_thread.mention}")
+            await match_information.user2.send(f"Matched with {match_information.user1}! Chat: {match_thread.mention}")
+        except Exception as e:
+            print("Failed to create channel: ", e)
 
     def eval_text(self, message):
         ''''
