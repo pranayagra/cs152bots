@@ -1,6 +1,10 @@
 from enum import Enum, auto
 import discord
 import re
+import numpy as np
+import os.path
+from datetime import date
+import pickle as pkl
 
 class State(Enum):
     REPORT_START = auto()
@@ -24,7 +28,15 @@ class Report:
         self.build_report_type()
         self.reason = []
         self.log = {}
+        self.read_user_information()
     
+    def read_user_information(self):
+        if os.path.exists('reported_user_info.pkl'):
+            with open('reported_user_info.pkl', 'rb') as handle:
+                self.reported_user_information = pkl.load(handle)
+        else:
+            self.reported_user_information = {}
+
     def build_report_type(self):
         self.report_content['Spam'] = [['Please select the type of spam', 
                                     'Excessive repeated messages', 
@@ -98,8 +110,12 @@ class Report:
             reply = ["I found this message:", "```" + message.author.name + ": " + message.content + "```", \
                     "Please select the reason for reporting this user/this message(1-5): \n"]
             self.log['reported_user'] = message.author
-            self.log['content'] = message.content
-            self.log['message'] = message
+            # self.log['content'] = message.content
+            self.log['reported_message'] = message.content
+            self.log['reported_channel'] = message.channel
+            self.log['reported_url'] = message
+            # import pdb; pdb.set_trace()
+            self.log['severity'] = 'Medium'
             for i, reason in enumerate(self.report_type):
                 reply[-1] += (str(i+1) + '. '+ reason+'\n')
             return reply
@@ -110,7 +126,7 @@ class Report:
                     self.log['user'] = message.author
                     self.reason.append(message.content)
                     self.log['reason'] = [self.report_type[int(message.content)-1]]
-                    print(self.log['reason'])
+                    self.log['reported_category'] = self.report_type[int(message.content)-1]
                     steps = self.report_content[self.report_type[int(message.content)-1]][0]
                     reply = ''
                     for index in range(len(steps)):
@@ -123,6 +139,7 @@ class Report:
                     # self.state = State.REPORT_COMPLETE
                     return ["Please select the reason for reporting this user/this message(1-5)"]
             elif self.reason[0] == '3':
+                self.log['severity'] = 'High'
                 if len(self.reason) == 1 and message.content in ['2','3']:
                     self.reason.append(int(message.content))
                     # self.log['reason'].append(self.report_content['Scam/Catfishing'][int(message.content)-1][0])
@@ -142,7 +159,7 @@ class Report:
                     for reason in self.log['reason']:
                         reply += (reason +' -- ')
                     reply = reply[:-4]
-                    self.state = State.REPORT_COMPLETE
+                    self.record_and_complete()
                     return [reply]
                 else:
                     self.reason.append(int(message.content))
@@ -150,23 +167,39 @@ class Report:
                         self.log['reason'].append(self.report_content['Scam/Catfishing'][self.reason[1]-1][int(message.content)])
                     else:
                         self.log['reason'].append(self.report_content['Scam/Catfishing'][0][int(message.content)])
-                    self.state = State.REPORT_COMPLETE
                     reply = "Your report is recorded with reason: "
                     for reason in self.log['reason']:
                         reply += (reason +' -- ')
                     reply = reply[:-4]
+                    self.record_and_complete()
                     return [reply]
             else:
                 self.log['reason'].append(self.report_content[self.log['reason'][0]][0][int(message.content)])
-                self.state = State.REPORT_COMPLETE
                 reply = "Your report is recorded with reason: "
                 for reason in self.log['reason']:
                     reply += (reason +' -- ')
                 reply = reply[:-4]
+                self.record_and_complete()
                 return [reply]
 
         return []
 
+    def record_and_complete(self):
+        print(self.log['reported_user'].id, type(self.log['reported_user'].id))
+        if self.log['reported_user'].id not in self.reported_user_information:
+            self.reported_user_information[self.log['reported_user'].id] = {}
+            self.reported_user_information[self.log['reported_user'].id]['num_report'] = 0
+            self.reported_user_information[self.log['reported_user'].id]['warned'] =0
+        self.reported_user_information[self.log['reported_user'].id]['last_report'] = None
+        self.reported_user_information[self.log['reported_user'].id]['num_report'] +=1
+        self.reported_user_information[self.log['reported_user'].id]['warned'] +=1
+        self.reported_user_information[self.log['reported_user'].id]['last_report'] = date.today()
+        with open('reported_user_info.pkl', 'wb') as handle:
+            pkl.dump(self.reported_user_information, handle)
+        # np.save('reported_user_info.npy', self.reported_user_information)
+        self.state = State.REPORT_COMPLETE
+
+    
     def report_complete(self):
         return self.state == State.REPORT_COMPLETE
     

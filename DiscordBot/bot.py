@@ -137,6 +137,10 @@ class ModBot(discord.Client):
 
         # If the report is complete or cancelled, remove it from our map
         if self.reports[author_id].report_complete():
+            report_information = self.reports[author_id].log
+            reported_user_information = self.reports[author_id].reported_user_information
+            pdb.set_trace()
+            self.handle_report(report_information, reported_user_information)
             self.reports.pop(author_id)
 
     async def handle_channel_message(self, message):
