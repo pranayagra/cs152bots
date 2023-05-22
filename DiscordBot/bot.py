@@ -144,7 +144,7 @@ class ModBot(discord.Client):
         if self.reports[author_id].report_complete():
             report_information = self.reports[author_id].log
             reported_user_information = self.reports[author_id].reported_user_information
-            pdb.set_trace()
+            # pdb.set_trace()
             self.handle_report(report_information, reported_user_information)
             self.reports.pop(author_id)
 
