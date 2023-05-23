@@ -23,38 +23,39 @@ class UnclaimedView:
 
 class ClaimedView:
     def __init__(self):
-        suspend_button = Button(style=discord.ButtonStyle.red, label='Suspend Reported User')
-        # warn_button = Button(style=discord.ButtonStyle.red, label='Warn Reported User')
-        false_report_button = Button(style=discord.ButtonStyle.red, label='False Report')
-        create_thread_button = Button(style=discord.ButtonStyle.blurple, label='Create Reporter Thread')
-        unclaim_button = Button(style=discord.ButtonStyle.gray, label='Unclaim Ticket')
-        self.owner_buttons = [suspend_button, false_report_button, create_thread_button, unclaim_button]   
+        self.create_thread_button = Button(style=discord.ButtonStyle.blurple, label='Create Reporter Thread')
+        self.warn_button = Button(style=discord.ButtonStyle.red, label='Warn Reported User')
+        self.suspend_button = Button(style=discord.ButtonStyle.red, label='Suspend Reported User')
+        self.false_report_button = Button(style=discord.ButtonStyle.red, label='False Report')
+        self.unclaim_button = Button(style=discord.ButtonStyle.gray, label='Unclaim Ticket')
 
         self.claimed_view = View(timeout=None)
-        for button in self.owner_buttons:
-            self.claimed_view.add_item(button)
+        self.claimed_view.add_item(self.create_thread_button)
+        self.claimed_view.add_item(self.warn_button)
+        self.claimed_view.add_item(self.suspend_button)
+        self.claimed_view.add_item(self.false_report_button)
+        self.claimed_view.add_item(self.unclaim_button)
 
     def view(self): return self.claimed_view
 
     def disable_create_thread_button(self):
-        self.owner_buttons[2].disabled = True
+        self.create_thread_button.disabled = True
     
     def enable_create_thread_button(self):
-        self.owner_buttons[2].disabled = False
+        self.create_thread_button.disabled = False
     
-    def set_callbacks(self, suspend_callback, false_report_callback, create_thread_callback, unclaim_callback):
-        self.owner_buttons[0].callback = suspend_callback
-        self.owner_buttons[1].callback = false_report_callback
-        self.owner_buttons[2].callback = create_thread_callback
-        self.owner_buttons[3].callback = unclaim_callback
-
+    def set_callbacks(self, create_thread_callback, warn_callback, suspend_callback, false_report_callback, unclaim_callback):
+        self.create_thread_button.callback = create_thread_callback
+        self.warn_button.callback = warn_callback
+        self.suspend_button.callback = suspend_callback
+        self.false_report_button.callback = false_report_callback
+        self.unclaim_button.callback = unclaim_callback
 
 class TicketAction(Enum):
     FALSE_REPORT = auto()
     WARN_USER = auto()
     BAN_USER = auto()
     TBD = auto()
-
 
 class TicketState(Enum):
     REPORT_UNCLAIMED = auto()
@@ -137,7 +138,6 @@ class Ticket:
         suspect = self.suspect 
         ticket_id = self.ticket_id
         filename = None
-        
 
 def new_report_prepend():
     return f'New report ticket! Click the Claim button to claim the ticket.\n'
@@ -150,6 +150,7 @@ def format_ticket_message(report_information):
     **Severity**: {report_information['severity']}
     **Reporter**: {report_information['user']}
     **Suspect**: {report_information['reported_user']}
+    **Suspect State**: {report_information['reported_user_state'].name}
 
     **Category**: {report_information['reported_category']}
     **Reason**: {report_information['reason']}
@@ -165,9 +166,9 @@ def format_reported_user_information(suspect, reported_user_information):
     body = f"""
     **Suspect**: {suspect}
     **Number of Reports**: {reported_user_information['num_report']}
-    **Has Been Warned**: {reported_user_information['warned'] > 0}
-    **Last Report**: {reported_user_information['last_report']}
     """
+    # **Has Been Warned**: {reported_user_information['warned'] > 0}
+    # **Last Report**: {reported_user_information['last_report']}
     return f'{prepend}{body}'
 
 async def handle_report_helper(report_information, reported_user_information, client):
@@ -206,6 +207,20 @@ async def handle_report_helper(report_information, reported_user_information, cl
         await ticket.main_message.edit(content=ticket.main_content(), view=unclaimed_view.view())
         await interaction.followup.send(f'Ticket unclaimed by {interaction.user}.')
 
+    async def warn_callback(interaction: discord.Interaction):
+        if not ticket.claimed: return
+
+        await interaction.response.defer()
+        ticket.set_action = TicketAction.WARN_USER
+        await ticket.set_unclaimed(state = TicketState.REPORT_COMPLETE)
+        await interaction.followup.send(f'Reported user warned by {interaction.user}.')
+        await ticket.reporter.send(f'Your report against {ticket.suspect} has resulted in them being warned.')
+        await ticket.suspect.send(f'You have been warned for {ticket.report_information["reason"]}. If this is a mistake, please type `appeal {ticket.mod_thread_id}`.')
+
+        bad_user = client.bad_users[ticket.suspect.id]
+        bad_user[ticket.mod_thread_id] = ticket
+        bad_user['state'] = BadUserState.WARN
+
     async def suspend_callback(interaction: discord.Interaction):
         if not ticket.claimed: return
 
@@ -216,13 +231,11 @@ async def handle_report_helper(report_information, reported_user_information, cl
         await ticket.reporter.send(f'Your report against {ticket.suspect} has resulted in them being suspended.')
         await ticket.suspect.send(f'You have been suspended for {ticket.report_information["reason"]}. If this is a mistake, please type `appeal {ticket.mod_thread_id}`.')
 
-        # delete user from all their threads
-        if ticket.suspect.id not in client.bad_users:
-            client.bad_users[ticket.suspect.id] = {}
         bad_user = client.bad_users[ticket.suspect.id]
         bad_user[ticket.mod_thread_id] = ticket
-        bad_user['state'] = 'suspended'
+        bad_user['state'] = BadUserState.SUSPEND
 
+        # delete user from all their match threads
         for thread in client.main_channel.threads:
             try:
                 await thread.fetch_member(ticket.suspect.id)
@@ -231,7 +244,6 @@ async def handle_report_helper(report_information, reported_user_information, cl
                 await thread.send(f'User {ticket.suspect.mention} has been suspended.')
             except:
                 pass
-
 
     async def false_report_callback(interaction: discord.Interaction):
         if not ticket.claimed: return
@@ -252,7 +264,7 @@ async def handle_report_helper(report_information, reported_user_information, cl
         await interaction.followup.send(f'Created private thread with reporter:s {ticket.reporter_thread.mention}')
 
     unclaimed_view.claim_button.callback = claim_callback
-    claimed_view.set_callbacks(suspend_callback, false_report_callback, create_thread_callback, unclaim_callback)        
+    claimed_view.set_callbacks(create_thread_callback, warn_callback, suspend_callback, false_report_callback, unclaim_callback)        
 
 def encode_fake_information(report_information, reported_user_information, fake_user):
     if not report_information and is_debug():

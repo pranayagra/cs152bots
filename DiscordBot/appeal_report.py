@@ -66,8 +66,9 @@ class AppealReportView:
             await self.appeal_thread.edit(locked=True)
 
             try:
-                self.client.bad_users[self.appealer.id].pop(self.ticket_id) # remove from bad users
-                self.client.bad_users['state'] = None
+                bad_user = self.client.bad_users[self.appealer.id]
+                bad_user.pop(self.ticket_id) # remove from bad users
+                bad_user['state'] = BadUserState.NONE
             except:
                 pass
 

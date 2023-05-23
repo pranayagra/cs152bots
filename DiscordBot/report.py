@@ -5,7 +5,8 @@ import numpy as np
 import os.path
 from datetime import date
 import pickle as pkl
-
+from enum import Enum, auto
+from utils import *
 # class PersistentInformation:
 #     def __init__(self):
 #         self.all_report_information = {}
@@ -225,6 +226,10 @@ class Report:
         self.reported_user_information[self.log['reported_user'].id]['num_report'] +=1
         self.reported_user_information[self.log['reported_user'].id]['warned'] +=1
         self.reported_user_information[self.log['reported_user'].id]['last_report'] = date.today()
+
+        suspect_id = self.log['reported_user'].id
+        if suspect_id not in self.client.bad_users:
+            self.client.bad_users[suspect_id] = {'state': BadUserState.NONE}
 
         print(self.reported_user_information)
         with open('reported_user_info.pkl', 'wb') as handle:

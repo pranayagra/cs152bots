@@ -34,14 +34,6 @@ with open(token_path) as f:
     tokens = json.load(f)
     discord_token = tokens['discord']
 
-
-
-# class BadUserState(Enum):
-#     SUSPEND = auto()
-#     WARN = auto()
-#     REPORT_COMPLETE = auto()
-#     REPORT_APPEAL = auto()
-
 # class BadUser:
 #     def __init__(self, state):
 #         self.reports = {}
@@ -109,6 +101,7 @@ class ModBot(discord.Client):
             # for thread in self.mod_channel.threads:
             #     await thread.delete()
             # for thread in self.main_channel.threads:
+            #     if thread.name.startswith('match-'): continue
             #     await thread.delete()
 
     async def on_message(self, message):
@@ -192,6 +185,13 @@ class ModBot(discord.Client):
         if is_debug(): report_information, reported_user_information = encode_fake_information(report_information, reported_user_information, fake_user)
         
         report_information['reported_score'] = 'N/A'
+        report_information['reported_user_state'] = BadUserState.NONE
+
+        try:
+            reported_user_id = report_information['reported_user'].id
+            report_information['reported_user_state'] = self.bad_users[reported_user_id]['state']
+        except:
+            pass
 
         await handle_report_helper(report_information, reported_user_information, client)
 

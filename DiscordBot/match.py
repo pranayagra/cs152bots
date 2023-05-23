@@ -19,7 +19,7 @@ class MatchRequestView:
 
         self.current_view = self.request_view
 
-        self.match_dm = f"{self.user1.mention} wants to match with you. Do you want to match back?"
+        self.match_dm = f"{self.user1} wants to match with you. Do you want to match back?"
 
     async def display_view(self):
         try:
@@ -164,7 +164,7 @@ async def handle_match_command_helper(message, client):
     
     try:
         state = client.bad_users[user1.id]['state']
-        if await check_issue(state.startswith('suspended'), user1.send, f"You are suspended"): return
+        if await check_issue(state == BadUserState.SUSPEND, user1.send, f"You are suspended"): return
     except:
         pass
 
