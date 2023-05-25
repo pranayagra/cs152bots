@@ -59,6 +59,7 @@ class Report:
         self.log = {}
         self.read_user_information()
         self.cancel = False
+        self.ban = None
     
     def read_user_information(self):
         if os.path.exists('reported_user_info.pkl'):
@@ -71,11 +72,22 @@ class Report:
         self.report_content['Spam'] = [['Please select the type of spam', 
                                     'Excessive repeated messages', 
                                     'Advertising unwanted goods', 
-                                    'Promoting sex work(OnlyFans, prostitution, etc)']]
+                                    'Promoting sex work(OnlyFans, prostitution, etc)'],
+                                    ["Thank you for reporting. Our moderation team will review the content and decide on the appropriate action, including notifying local authorities if necessary.",
+                                    "Do you want to unmatch and block this user?",
+                                    "Yes, I want to unmatch and block this user",
+                                    "No, I want to stay matched"]]
         self.report_content['Harassment'] = [['Please select the type of harassment',
                                           'Sexual Harassment',
                                           'Racism',
-                                          'Hate Speech']]
+                                          'Hate Speech'],
+                                          ["Would you like to read websites about self-care after experiencing harassment and/or be connected to resources about how to handle harassment?",
+                                           "Yes",
+                                           "No"],
+                                          ["Thank you for reporting. Our moderation team will review the content and decide on the appropriate action, including notifying local authorities if necessary.",
+                                            "Do you want to unmatch and block this user?",
+                                            "Yes, I want to unmatch and block this user",
+                                            "No, I want to stay matched"]]
         self.report_content['Scam/Catfishing'] = [['Please select the type of scam/catfishing',
                                                 'This person is a bot',
                                                 'This person is pretending to be someone else',
@@ -86,17 +98,29 @@ class Report:
                                                 'Pretending to be a public figure'],
                                                 ['Please select why you believe this user is a minor',
                                                 'This user\'s bio or messages said they are a minor',
-                                                'other: [write in text box]']
+                                                'other: [write in text box]'],
+                                                ["Thank you for reporting. Our moderation team will review the content and decide on the appropriate action, including notifying local authorities if necessary.",
+                                        "Do you want to unmatch and block this user?",
+                                            "Yes, I want to unmatch and block this user",
+                                            "No, I want to stay matched"]
                                                ]
         self.report_content['Imminent Danger'] = [['Please select the type of danger',
                                                 'Credible threat of violence',
-                                                'Self-harm or suicidal intent']]
+                                                'Self-harm or suicidal intent'],
+                                                ["Thank you for reporting. Our moderation team will review the content and decide on the appropriate action, including notifying local authorities if necessary.",
+                                                "Do you want to unmatch and block this user?",
+                                                 "Yes, I want to unmatch and block this user",
+                                                 "No, I want to stay matched"]]
         self.report_content['Illegal or inappropriate content'] = [['Please select the type of content',
                                                                  'Adult nudity',
                                                                  'Child sexual abuse material',
                                                                  'Depiction of violence',
                                                                  'Images of weapons',
-                                                                 'Images of drugs']]
+                                                                 'Images of drugs'],
+                                                                 ["Thank you for reporting. Our moderation team will review the content and decide on the appropriate action, including notifying local authorities if necessary.",
+                                                                "Do you want to unmatch and block this user?",
+                                                                "Yes, I want to unmatch and block this user",
+                                                                "No, I want to stay matched"]]
         self.report_type = list(self.report_content.keys())
     
     
@@ -168,7 +192,6 @@ class Report:
                             reply += (str(index) + '. '+ steps[index]+'\n')
                     return [reply]
                 else:
-                    # self.state = State.REPORT_COMPLETE
                     return ["Please select the reason for reporting this user/this message(1-5)"]
             elif self.reason[0] == '3':
                 self.log['severity'] = 'High'
@@ -187,36 +210,95 @@ class Report:
                     self.reason.append(2)
                     text_box = message.content[2:]
                     self.log['reason'].append(text_box)
-                    reply = "Your report is recorded with reason: "
-                    for reason in self.log['reason']:
-                        reply += (reason +' -- ')
-                    reply = reply[:-4]
-                    self.record_and_complete()
+                    steps = self.report_content[self.report_type[int(self.reason[0])-1]][-1]
+                    reply = ''
+                    for index in range(len(steps)):
+                        if index == 0:
+                            reply += (steps[0]+'\n')
+                        elif index == 1:
+                            reply += (steps[1]+':\n')
+                        else:
+                            reply += (str(index-1) + '. '+ steps[index]+'\n')
+                    self.ban = False
                     return [reply]
-                else:
+                elif self.ban is None:
                     self.reason.append(int(message.content))
                     if self.reason[1] in [2, 3]:
                         self.log['reason'].append(self.report_content['Scam/Catfishing'][self.reason[1]-1][int(message.content)])
                     else:
                         self.log['reason'].append(self.report_content['Scam/Catfishing'][0][int(message.content)])
-                    reply = "Your report is recorded with reason: "
-                    for reason in self.log['reason']:
-                        reply += (reason +' -- ')
-                    reply = reply[:-4]
-                    self.record_and_complete()
+                    steps = self.report_content[self.report_type[int(self.reason[0])-1]][-1]
+                    reply = ''
+                    for index in range(len(steps)):
+                        if index == 0:
+                            reply += (steps[0]+'\n')
+                        elif index == 1:
+                            reply += (steps[1]+':\n')
+                        else:
+                            reply += (str(index-1) + '. '+ steps[index]+'\n')
+                    self.ban = False
                     return [reply]
+                else:
+                    self.ban = (message.content == '1')
+                    self.record_and_complete()
+                    return []
+            elif self.reason[0] == '2':
+                if len(self.reason) == 1:
+                    self.reason.append(int(message.content))
+                    steps = self.report_content[self.report_type[int(self.reason[0])-1]][1]
+                    reply = ''
+                    for index in range(len(steps)):
+                        if index == 0:
+                            reply += (steps[0]+':\n')
+                        else:
+                            reply += (str(index) + '. '+ steps[index]+'\n')
+                    return [reply]
+                elif self.ban is None:
+                    self.reason.append(int(message.content))
+                    if message.content == '1':
+                        reply = 'Websites that may be helpful include: [include websites]\n'
+                    else:
+                        reply = ''
+                    steps = self.report_content[self.report_type[int(self.reason[0])-1]][-1]
+                    for index in range(len(steps)):
+                        if index == 0:
+                            reply += (steps[0]+'\n')
+                        elif index == 1:
+                            reply += (steps[1]+':\n')
+                        else:
+                            reply += (str(index-1) + '. '+ steps[index]+'\n')
+                    self.ban = False
+                    return [reply]
+                else:
+                    self.ban = (message.content == '1')
+                    self.record_and_complete()
+                    return []
+            elif self.reason[0] in ['1', '4', '5']:
+                if len(self.reason) == 1:
+                    self.reason.append(int(message.content))
+                    steps = self.report_content[self.report_type[int(self.reason[0])-1]][1]
+                    reply = ''
+                    for index in range(len(steps)):
+                        if index == 0:
+                            reply += (steps[0]+'\n')
+                        elif index == 1:
+                            reply += (steps[1]+':\n')
+                        else:
+                            reply += (str(index-1) + '. '+ steps[index]+'\n')
+                    self.log['reason'].append(self.report_content[self.log['reason'][0]][0][int(message.content)])
+                    # print(self.log['reason'])
+                    return [reply]
+                else:
+                    self.ban = (message.content == '1')
+                    self.record_and_complete()
+                    return []
             else:
-                self.log['reason'].append(self.report_content[self.log['reason'][0]][0][int(message.content)])
-                reply = "Your report is recorded with reason: "
-                for reason in self.log['reason']:
-                    reply += (reason +' -- ')
-                reply = reply[:-4]
                 self.record_and_complete()
-                return [reply]
-
+                return []
         return []
 
     def record_and_complete(self):
+        self.log['unmatch'] = self.ban
         # print(self.log['reported_user'].id, type(self.log['reported_user'].id))
         if self.log['reported_user'].id not in self.reported_user_information:
             self.reported_user_information[self.log['reported_user'].id] = {}
