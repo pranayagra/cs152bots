@@ -100,6 +100,11 @@ class ModBot(discord.Client):
         Currently the bot is configured to only handle messages that are sent over DMs or in your group's "group-#" channel. 
         '''
         print(f"Received message: {message.content}")
+        # for banned_word in self.banned_word:
+        #     if banned_word in message.content:
+        #         message.content = 'This user is sending banned word'
+        #         print("lalalala")
+        #         return
         # Ignore messages from the bot 
         if message.author.id == self.user.id:
             return
@@ -114,9 +119,6 @@ class ModBot(discord.Client):
             await self.handle_dm(message)
 
     async def handle_dm(self, message):
-        if message.content in self.banned_word:
-            reply = 'You are sending a message that contains a banned word'
-            return
         # Handle a help message
         if message.content == Report.HELP_KEYWORD:
             reply =  "Use the `report` command to begin the reporting process.\n"
@@ -185,7 +187,9 @@ class ModBot(discord.Client):
                 await self.mod_channel.send(f'You are sending message to mod channel')
             return
         if not message.channel.name == f'group-{self.group_num}':
-            return
+            for banned_word in self.banned_word:
+                if banned_word in message.content:
+                    await message.delete()
 
         # Forward the message to the mod channel
         await self.mod_channel.send(f'Forwarded message:\n{message.author.name}: "{message.content}"')
