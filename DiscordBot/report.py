@@ -183,6 +183,7 @@ class Report:
                     self.reason.append(message.content)
                     self.log['reason'] = [self.report_type[int(message.content)-1]]
                     self.log['reported_category'] = self.report_type[int(message.content)-1]
+                    self.log['category_id'] = int(message.content)
                     steps = self.report_content[self.report_type[int(message.content)-1]][0]
                     reply = ''
                     for index in range(len(steps)):

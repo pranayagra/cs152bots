@@ -11,12 +11,16 @@ import requests
 from report import Report
 import pdb
 from enum import Enum, auto
-
+import ssl
 
 from utils import *
 from mod_report import *
 from match import *
 from appeal_report import *
+
+# user database: {user_id: [username, num_warnings, num_suspends, num_reports]}
+
+
 
 # Set up logging to the console
 logger = logging.getLogger('discord')
@@ -40,6 +44,9 @@ class ModBot(discord.Client):
         intents.message_content = True
         intents.members = True
         super().__init__(command_prefix='.', intents=intents)
+
+        ssl._create_default_https_context = ssl._create_unverified_context
+
         self.group_num = None
         self.mod_channels = {} # Map from guild to the mod channel id for that guild
         self.main_channels = {}
@@ -88,28 +95,59 @@ class ModBot(discord.Client):
             #     if thread.name.startswith('match-'): continue
             #     await thread.delete()
 
+    async def handle_new_message(self, message):
+
+        if message.author.id == self.user.id:
+            return
+
+        content = message.content
+
+        # replace unicode characters
+        content = replace_unicode_from_text(content)
+        
+        # make content lowercase
+        content = content.lower()
+
+        print(f"Received message (fixed): {content}")
+        return
+
+        # AI LINK STUFF
+        has_bad_link = has_bad_links(content)
+        if has_bad_link:
+            await message.delete()
+            message.author.send('Your message was deleted because it contained a link to a bad website. Please do not post links containing undesirable content.')
+            # TODO: increment counter in database, if counter >= 5, suspend user (and user can appeal)
+
+        # AI MESSAGE STUFF
+        category = message_autoflag(content)
+        if category != 5:
+            print(f"Autoflagged message as {category}")
+            score = ai_score(content, category)
+            print(f"AI score: {score}")            
+            if score >= 90:
+                pass
+                # TODO: Yilun HIGH priority, bot reports user
+            elif score >= 50:
+                pass
+                # TODO: Yilun MEDIUM priority, bot reports user
 
     async def on_message_edit(self, before, after):
         if before.content != after.content:
-            print(f'User {before.author} edited a message from {before.content} to {after.content}.')
-                # do something here            
+            # print(f'User {before.author} edited a message from {before.content} to {after.content}.')
+            await self.handle_new_message(after)         
 
     async def on_message(self, message):
         '''
         This function is called whenever a message is sent in a channel that the bot can see (including DMs). 
         Currently the bot is configured to only handle messages that are sent over DMs or in your group's "group-#" channel. 
         '''
-        print(f"Received message: {message.content}")
-        # for banned_word in self.banned_word:
-        #     if banned_word in message.content:
-        #         message.content = 'This user is sending banned word'
-        #         print("lalalala")
-        #         return
+        
         # Ignore messages from the bot 
         if message.author.id == self.user.id:
             return
 
-        fake_user = await self.username_to_user("ashto1")
+        await self.handle_new_message(message)
+        # fake_user = await self.username_to_user("ashto1")
         # await self.handle_report(None, None, fake_user)
 
         # Check if this message was sent in a server ("guild") or if it's a DM
