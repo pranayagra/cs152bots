@@ -1,3 +1,4 @@
+import re
 import discord
 from discord.utils import get
 from discord.ext import commands
@@ -5,6 +6,7 @@ from enum import Enum, auto
 import openai
 import os
 import json
+import requests
 
 token_path = 'tokens.json'
 if not os.path.isfile(token_path):
@@ -33,8 +35,56 @@ def get_category_by_name(guild, category_name):
             return category
     return None
 
+reporting_categories = [
+    'user is a bot',
+    'user is pretending to be someone else',
+    'user is a minor',
+    'user is trying to get money (eg. asking for Venmo, CashApp)',
+]
+
 def message_autoflag(message):
-    print(openai.Model.list())
+    prompt = \
+'''Pick a number 1-5 for the following categories. Do not respond with anything else.
+1. %s
+2. %s
+3. %s
+4. %s
+5. none
+
+Message: %s''' % (reporting_categories[0], reporting_categories[1], reporting_categories[2], reporting_categories[3], message)
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+                {"role": "system", "content": "You are a helpful assistant for trust and safety engineering on a dating app"},
+                {"role": "user", "content": prompt},
+            ]
+    )
+    category_response = response['choices'][0]['message']['content']
+    for i in range(1, 6):
+        if f'{i}' in category_response:
+            return i
+    return 5
+
+def ai_score(message, category):
+    assert category in [1, 2, 3, 4]
+    prompt = \
+'''With what probability does the below message from a user indicate that %s?
+Pick a number 0-100. Do not respond with anything else.
+
+Message: %s''' % (reporting_categories[category-1], message)
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+                {"role": "system", "content": "You are a helpful assistant for trust and safety engineering on a dating app"},
+                {"role": "user", "content": prompt + message},
+            ]
+    )
+    score = response['choices'][0]['message']['content']
+    score = re.findall(r'\d+', score)
+    if score:
+        return score[-1]
+    else:
+        50
 
 class BadUserState(Enum):
     SUSPEND = auto()
@@ -45,4 +95,11 @@ def url_to_text(url):
     print(requests.get("http://stackoverflow.com").text)
 
 if __name__ == '__main__':
-    message_autoflag('aaaaaa')
+    # msg = 'im a bot'
+    # msg = 'im am 19 yrs old'
+    # msg = 'pay me 100 on Venmo'
+    msg = 'my mom needs money'
+    cat = message_autoflag(msg)
+    print(cat)
+    score = ai_score(msg, cat)
+    print(score)
