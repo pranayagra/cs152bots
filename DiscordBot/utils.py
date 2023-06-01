@@ -24,3 +24,6 @@ class BadUserState(Enum):
     SUSPEND = auto()
     WARN = auto()
     NONE = auto()
+
+def url_to_text(url):
+    print(requests.get("http://stackoverflow.com").text)

@@ -34,24 +34,6 @@ with open(token_path) as f:
     tokens = json.load(f)
     discord_token = tokens['discord']
 
-# class BadUser:
-#     def __init__(self, state):
-#         self.reports = {}
-#         self.state = state
-
-#     def add_ticket(self, ticket_id, ticket):
-#         self.reports[ticket_id] = ticket
-
-#     def warn(self):
-#         self.state = BadUserState.WARN
-
-#     def suspend(self):
-#         self.state = BadUserState.SUSPENDED
-    
-#     def can_appeal(self):
-        
-
-
 class ModBot(discord.Client):
     def __init__(self): 
         intents = discord.Intents.default()
@@ -98,18 +80,26 @@ class ModBot(discord.Client):
         self.mod_channel = self.mod_channels[self.guild.id] 
         self.main_channel = self.main_channels[self.guild.id]
 
-        if is_debug(): pass
+        if is_debug():
+            pass
             # for thread in self.mod_channel.threads:
             #     await thread.delete()
             # for thread in self.main_channel.threads:
             #     if thread.name.startswith('match-'): continue
             #     await thread.delete()
 
+
+    async def on_message_edit(self, before, after):
+        if before.content != after.content:
+            print(f'User {before.author} edited a message from {before.content} to {after.content}.')
+                # do something here            
+
     async def on_message(self, message):
         '''
         This function is called whenever a message is sent in a channel that the bot can see (including DMs). 
         Currently the bot is configured to only handle messages that are sent over DMs or in your group's "group-#" channel. 
         '''
+        print(f"Received message: {message.content}")
         # Ignore messages from the bot 
         if message.author.id == self.user.id:
             return
