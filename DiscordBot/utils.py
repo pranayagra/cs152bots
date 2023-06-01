@@ -10,6 +10,7 @@ import openai
 import os
 import json
 import requests
+from unidecode import unidecode
 
 token_path = 'tokens.json'
 if not os.path.isfile(token_path):
@@ -95,7 +96,7 @@ class BadUserState(Enum):
     NONE = auto()
 
 
-def ai_links(message):
+def has_bad_links(message):
     urls = text_to_urls(message.content)
     for url in urls:
         try:
@@ -128,6 +129,12 @@ def url_to_text(url):
         return text_from_html(html)
     except:
         pass
+
+def replace_unicode_from_text(text):
+    try:
+        return unidecode(text)
+    except:
+        return text
 
 if __name__ == '__main__':
     # msg = 'im a bot'
