@@ -65,6 +65,7 @@ class ModBot(discord.Client):
         self.matches = Match()
         self.bad_users = {}
         self.appealed_tickets = set()
+        self.banned_word = []
 
     async def username_to_user(self, username):
         name = self.guild.get_member_named(username)
@@ -123,6 +124,9 @@ class ModBot(discord.Client):
             await self.handle_dm(message)
 
     async def handle_dm(self, message):
+        if message.content in self.banned_word:
+            reply = 'You are sending a message that contains a banned word'
+            return
         # Handle a help message
         if message.content == Report.HELP_KEYWORD:
             reply =  "Use the `report` command to begin the reporting process.\n"
@@ -172,6 +176,24 @@ class ModBot(discord.Client):
 
     async def handle_channel_message(self, message):
         # Only handle messages sent in the "group-#" channel
+        if message.channel.name == f'group-{self.group_num}-mod':
+            # sending message to mod channel, patterns contains:
+            # 1. ban xxx, remove ban xxx
+            if message.content.startswith('ban'):
+                # banning a word
+                banned_word_index = message.content.index('ban')+4
+                banned_word = message.content[banned_word_index:]
+                self.banned_word.append(banned_word)
+                await self.mod_channel.send(banned_word +' is banned')
+            elif message.content.startswith('remove'):
+                # removing ban of a word
+                banned_word_index = message.content.index('ban')+4
+                banned_word = message.content[banned_word_index:]
+                self.banned_word.remove(banned_word)
+                await self.mod_channel.send(banned_word+ ' ban is removed')
+            else:
+                await self.mod_channel.send(f'You are sending message to mod channel')
+            return
         if not message.channel.name == f'group-{self.group_num}':
             return
 
