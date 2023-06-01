@@ -11,7 +11,7 @@ import requests
 from report import Report
 import pdb
 from enum import Enum, auto
-
+import ssl
 
 from utils import *
 from mod_report import *
@@ -40,6 +40,9 @@ class ModBot(discord.Client):
         intents.message_content = True
         intents.members = True
         super().__init__(command_prefix='.', intents=intents)
+
+        ssl._create_default_https_context = ssl._create_unverified_context
+
         self.group_num = None
         self.mod_channels = {} # Map from guild to the mod channel id for that guild
         self.main_channels = {}
@@ -86,7 +89,6 @@ class ModBot(discord.Client):
             # for thread in self.main_channel.threads:
             #     if thread.name.startswith('match-'): continue
             #     await thread.delete()
-
 
     async def on_message_edit(self, before, after):
         if before.content != after.content:
