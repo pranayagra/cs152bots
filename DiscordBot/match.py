@@ -89,7 +89,7 @@ class MatchInformation:
     async def create_thread(self, client):
         self.thread = await client.main_channel.create_thread(
                 name=self.thread_name, 
-                type=discord.ChannelType.private_thread,
+                type=discord.ChannelType.public_thread,
                 invitable=False
         )
         await self.thread.add_user(self.user1)
@@ -179,8 +179,11 @@ async def handle_match_command_helper(message, client):
 
     # if user2 has not already sent user1 a match request, send a match request to user2
     if not client.matches.is_match_request(user2, user1):
-        match_request_view = MatchRequestView(user1, user2, client)
-        await match_request_view.display_view()
+        if is_debug():
+            client.matches.add_match_request(user2, user1)
+        else:
+            match_request_view = MatchRequestView(user1, user2, client)
+            await match_request_view.display_view()
 
     if client.matches.is_match(user1, user2):
         match_information = client.matches.get_match(user1, user2)
