@@ -139,7 +139,7 @@ class ModBot(discord.Client):
         has_bad_link = has_bad_links(content)
         if has_bad_link:
             await message.delete()
-            message.author.send('Your message was deleted because it contained a link to a bad website. Please do not post links containing undesirable content.')
+            await message.author.send('Your message was deleted because it contained a link to a bad website. Please do not post links containing undesirable content.')
             # TODO: increment counter in database, if counter >= 5, suspend user (and user can appeal)
 
         # AI MESSAGE STUFF
