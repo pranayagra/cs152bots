@@ -118,7 +118,11 @@ class ModBot(discord.Client):
             return
         
         # check if message is in the main channel
-        if not message.channel.name.startswith('match-'): return
+        
+        try:
+            if not message.channel.name.startswith('match-'): return
+        except:
+            return
 
         content = message.content
 
