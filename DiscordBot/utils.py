@@ -10,6 +10,7 @@ import openai
 import os
 import json
 import requests
+from unidecode import unidecode
 
 token_path = 'tokens.json'
 if not os.path.isfile(token_path):
@@ -151,6 +152,12 @@ def url_to_text(url):
         return text_from_html(html)
     except:
         pass
+
+def replace_unicode_from_text(text):
+    try:
+        return unidecode(text)
+    except:
+        return text
 
 if __name__ == '__main__':
     # ai_links('https://pornhub.com https://drugs.com')
