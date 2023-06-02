@@ -82,6 +82,8 @@ class Ticket:
         self.is_bot = is_bot
         self.has_been_warned = report_information['reported_user_state'] == BadUserState.WARN # TODO: Matt replace with user-data database
 
+        self.ai_score = report_information['reported_score']
+
         self.main_message = None # created soon after ticket is created
         self.main_message_text = format_ticket_message(report_information)
 
@@ -148,6 +150,7 @@ class Ticket:
             )        
         await self.reporter_thread.add_user(self.reporter)   
         await self.reporter_thread.add_user(self.claimed_by) 
+
 
 def unclaimed_report_prepend():
     return f'New report ticket! Click the Claim button to claim the ticket.\n'
@@ -242,7 +245,7 @@ async def handle_report_helper(report_information, reported_user_information, cl
 
     ticket.main_message = await ticket.mod_thread.send(content=ticket.main_content(), view=unclaimed_view.view())
 
-    await ticket.mod_thread.send(content=format_reported_user_information(ticket.suspect, reported_user_information))
+    await ticket.mod_thread.send(content=format_reported_user_information(ticket.suspect, reported_user_information)) 
 
     async def claim_callback(interaction: discord.Interaction):
         if ticket.claimed: return
@@ -321,7 +324,39 @@ async def handle_report_helper(report_information, reported_user_information, cl
         await interaction.followup.send(f'Created private thread with reporter: {ticket.reporter_thread.mention}')
 
     unclaimed_view.claim_button.callback = claim_callback
-    claimed_view.set_callbacks(create_thread_callback, accept_callback, reject_callback, unclaim_callback)        
+    claimed_view.set_callbacks(create_thread_callback, accept_callback, reject_callback, unclaim_callback) 
+
+    if ticket.ai_score >= 90:
+        ticket.set_claimed(client.user)
+        unclaimed_view.disable_claim_button()
+        await ticket.main_message.edit(content=ticket.main_content(), view=unclaimed_view.view())
+        await ticket.mod_thread.send(f'Ticket claimed by {client.user}.')  
+        
+        ticket.action_state = TicketActionState.ACTION_ACCEPTED
+        await ticket.complete_report()
+
+        category_id = ticket.category_id
+        interaction_message, reporter_message, suspect_message, action = accept_report_workflow(ticket)
+
+        await ticket.mod_thread.send(interaction_message)
+        await ticket.suspect.send(suspect_message)
+        await ticket.suspect.send(f'If this is a mistake, please type `appeal {ticket.mod_thread_id}`.')
+        if reporter_message: await ticket.reporter.send(reporter_message)
+
+        bad_user = client.bad_users[ticket.suspect.id]
+        bad_user[ticket.mod_thread_id] = ticket
+        if action == 'warn':
+            bad_user['state'] = BadUserState.WARN
+        else:
+            bad_user['state'] = BadUserState.SUSPEND
+            for thread in client.main_channel.threads:
+                try:
+                    await thread.fetch_member(ticket.suspect.id)
+                    if thread.name.startswith('appeal-'): continue
+                    await thread.edit(locked=True)
+                    await thread.send(f'User {ticket.suspect.mention} has been suspended.')
+                except:
+                    pass            
 
 def encode_fake_information(report_information, reported_user_information, fake_user):
     if not report_information and is_debug():
