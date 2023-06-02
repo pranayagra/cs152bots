@@ -236,6 +236,8 @@ async def handle_report_helper(report_information, reported_user_information, cl
     ticket = Ticket(report_information, reported_user_information, is_bot)
     await ticket.create_mod_thread(client)
 
+    client.mod_tickets[ticket.mod_thread_id] = ticket
+
     update_ticket_firebase(ticket.mod_thread_id, ticket) # TODO: Matt firebase
 
     ticket.main_message = await ticket.mod_thread.send(content=ticket.main_content(), view=unclaimed_view.view())

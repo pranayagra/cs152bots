@@ -58,6 +58,7 @@ class ModBot(discord.Client):
         self.appealed_tickets = set()
         self.log = {}
         self.read_user_information()
+        self.mod_tickets = {}
 
         if os.path.exists('all_banned_word.pkl'):
             with open('all_banned_word.pkl', 'rb') as handle:
@@ -117,8 +118,7 @@ class ModBot(discord.Client):
             return
         
         # check if message is in the main channel
-        if message.channel.id != self.main_channel.id:
-            return
+        if not message.channel.name.startswith('match-'): return
 
         content = message.content
 
