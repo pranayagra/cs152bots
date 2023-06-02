@@ -21,7 +21,31 @@ import pickle as pkl
 from datetime import date
 
 # user database: {user_id: [username, num_warnings, num_suspends, num_reports]}
+# TODO:(Pranay): To verify
+class UserData:
+    def __init__(self, username, user_id, num_warnings=0, num_suspends=0, num_reports_made=0, num_reports_against=0, is_banned=False, is_verified_account=False, last_report=""):
+        self.username = username
+        self.user_id = user_id
+        self.num_warnings = num_warnings
+        self.num_suspends = num_suspends
+        self.num_reports_made = num_reports_made
+        self.num_reports_against = num_reports_against
+        self.is_banned = is_banned
+        self.last_report = last_report
+        self.is_verified_account = is_verified_account # TODO(Pranay): add in code to verify user
 
+    def to_dict(self):
+        return {
+            'username': self.username,
+            'user_id': self.user_id,
+            'last_report': self.last_report,
+            'num_warnings': self.num_warnings,
+            'num_suspends': self.num_suspends,
+            'num_reports_made': self.num_reports_made,
+            'num_reports_against': self.num_reports_against,
+            'is_banned': self.is_banned,
+            'is_verified_account': self.is_verified_account,
+        }
 
 
 # Set up logging to the console
@@ -63,6 +87,7 @@ class ModBot(discord.Client):
         if os.path.exists('all_banned_word.pkl'):
             with open('all_banned_word.pkl', 'rb') as handle:
                 self.banned_word = pkl.load(handle)
+                #TODO(yih301): use fetch_banned_words instead don't load from a file
         else:
             self.banned_word = []
     
@@ -76,7 +101,16 @@ class ModBot(discord.Client):
     async def username_to_user(self, username):
         name = self.guild.get_member_named(username)
         if name is None: return False
-        return await self.fetch_user(name.id)       
+        return await self.fetch_user(name.id) 
+
+    async def set_all_members_in_firebase(self):
+        for guild in self.guilds:
+            for channel in guild.channels:
+                if isinstance(channel, discord.TextChannel) and channel.name == 'group-7':
+                    for member in channel.members: 
+                        username = member.name
+                        user_id = member.id
+                        create_user_data_in_firebase(user_id, UserData(username, user_id))
 
     async def on_ready(self):
         print(f'{self.user.name} has connected to Discord! It is these guilds:')
@@ -103,6 +137,9 @@ class ModBot(discord.Client):
         self.category = get_category_by_name(guild, 'Project Team Channels (1-24)')   
         self.mod_channel = self.mod_channels[self.guild.id] 
         self.main_channel = self.main_channels[self.guild.id]
+
+        # create all users in firebase
+        await self.set_all_members_in_firebase()
 
         if is_debug():
             pass
@@ -180,7 +217,7 @@ class ModBot(discord.Client):
             self.reported_user_information[self.log['reported_user'].id]['warned'] = 0
         self.reported_user_information[self.log['reported_user'].id]['num_report'] +=1
         self.reported_user_information[self.log['reported_user'].id]['warned'] +=1
-        self.reported_user_information[self.log['reported_user'].id]['last_report'] = date.today()
+        self.reported_user_information[self.log['reported_user'].id]['last_report'] = date.today() # TODO: use .strftime("%Y-%m-%d") to convert to string for firebase compatibility
 
         suspect_id = self.log['reported_user'].id
         if suspect_id not in self.bad_users:
@@ -274,6 +311,7 @@ class ModBot(discord.Client):
                 banned_word_index = message.content.index('add')+4
                 banned_word = message.content[banned_word_index:]
                 self.banned_word.append(banned_word)
+                # TODO(yih301): add in firebase with add_banned_word()
                 with open('all_banned_word.pkl', 'wb') as handle:
                     pkl.dump(self.banned_word, handle)
                 await self.mod_channel.send(banned_word +' is banned')
@@ -283,6 +321,7 @@ class ModBot(discord.Client):
                 banned_word_index = message.content.index('remove')+7
                 banned_word = message.content[banned_word_index:]
                 self.banned_word.remove(banned_word)
+                # TODO(yih301): remove from firebase with remove_banned_word()
                 with open('all_banned_word.pkl', 'wb') as handle:
                     pkl.dump(self.banned_word, handle)
                 await self.mod_channel.send(banned_word+ ' ban is removed')
@@ -320,9 +359,9 @@ class ModBot(discord.Client):
 
         try:
             reported_user_id = report_information['reported_user'].id
-            user_data = get_user_data_firebase(reported_user_id) # TODO: Matt firebase
+            user_data = get_user_data_firebase(reported_user_id)
 
-            # TODO: replace with user_data information
+            # TODO(Pranay): replace with user_data information
 
             report_information['reported_user_state'] = self.bad_users[reported_user_id]['state']
         except:

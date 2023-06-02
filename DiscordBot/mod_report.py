@@ -108,6 +108,34 @@ class Ticket:
         self.action_state = TicketActionState.ACTION_NONE
         self.appeal_state = TicketAppealState.APPEAL_NONE
 
+    # TODO(Pranay): verify correct stuff is logged
+    def to_dict(self):
+        # Convert the class to a dictionary. 
+        # Note: We convert the enums to strings here for serialization
+        return {
+            # 'report_information': self.report_information,
+            # 'reported_user_information': self.reported_user_information,
+            'is_bot': self.is_bot,
+            'has_been_warned': self.has_been_warned,
+            'ai_score': self.ai_score,
+            'main_message': self.main_message,
+            'main_message_text': self.main_message_text,
+            'reporter_id': self.reporter.id,
+            'suspect_id': self.suspect.id,
+            'category_id': self.category_id,
+            'claimed': self.claimed,
+            'claimed_by': self.claimed_by,
+            'claimed_webhook_message': self.claimed_webhook_message,
+            'mod_thread_name': self.mod_thread_name,
+            # 'mod_thread': self.mod_thread,
+            'mod_thread_id': self.mod_thread_id,
+            'reporter_thread_name': self.reporter_thread_name,
+            # 'reporter_thread': self.reporter_thread,
+            'report_state': self.report_state.name,
+            'action_state': self.action_state.name,
+            'appeal_state': self.appeal_state.name
+        }
+
     def set_claimed(self, claimed_by):
         self.claimed = True
         self.claimed_by = claimed_by
@@ -241,7 +269,7 @@ async def handle_report_helper(report_information, reported_user_information, cl
 
     client.mod_tickets[ticket.mod_thread_id] = ticket
 
-    update_ticket_firebase(ticket.mod_thread_id, ticket) # TODO: Matt firebase
+    update_ticket_firebase(ticket.mod_thread_id, ticket)
 
     ticket.main_message = await ticket.mod_thread.send(content=ticket.main_content(), view=unclaimed_view.view())
 
@@ -326,7 +354,8 @@ async def handle_report_helper(report_information, reported_user_information, cl
     unclaimed_view.claim_button.callback = claim_callback
     claimed_view.set_callbacks(create_thread_callback, accept_callback, reject_callback, unclaim_callback) 
 
-    if ticket.ai_score >= 90:
+    # TODO(Pranay): verify why ticket.ai_score may be none
+    if ticket.ai_score and ticket.ai_score >= 90:
         ticket.set_claimed(client.user)
         unclaimed_view.disable_claim_button()
         await ticket.main_message.edit(content=ticket.main_content(), view=unclaimed_view.view())
