@@ -86,7 +86,7 @@ Score: ''' % (reporting_categories[category-1], message)
             ]
     )
     score = response['choices'][0]['message']['content']
-    # print('AI SCORE RAW: ', score)
+    print('AI SCORE RAW: ', score)
     score = re.findall(r'\d+', score)
     if score:
         return int(score[-1])
