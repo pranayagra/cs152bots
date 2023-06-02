@@ -115,6 +115,10 @@ class ModBot(discord.Client):
 
         if message.author.id == self.user.id:
             return
+        
+        # check if message is in the main channel
+        if message.channel.id != self.main_channel.id:
+            return
 
         content = message.content
 
@@ -139,31 +143,33 @@ class ModBot(discord.Client):
         if category != 5:
             print(f"Autoflagged message as {category}")
             score = ai_score(content, category)
-            print(f"AI score: {score}")     
-
-            link = message.content
-            m = re.search('/(\d+)/(\d+)/(\d+)', link)     
-            # thread = self.main_channel.get_thread(int(m.group(2)))
+            print(f"AI score: {score}")
+             
+            link = message.jump_url
+            m = re.search('/(\d+)/(\d+)/(\d+)', link)   
+            thread = self.main_channel.get_thread(int(m.group(2)))
             self.log['reported_user'] = message.author
             self.log['reported_message'] = message.content
-            # self.log['reported_thread'] = thread.name
+            self.log['reported_thread'] = thread.name
             self.log['reported_url'] = link
             self.log['user'] = self.user
-            self.log['reason'] = [category]
-            self.log['reported_category'] = category
+            self.log['reason'] = reporting_categories[category]
+            self.log['reported_category'] = reporting_categories[category]
             self.log['category_id'] = category
             self.log['unmatch'] = False
+            self.log['reported_score'] = score
             self.record_report()
-            if score is not None:
+            if score is not None and score >= 50:
                 if score >= 90:
                     # TODO: Yilun HIGH priority, bot reports user
                     self.log['severity'] = 'High'
                 elif score >= 50:
                     # TODO: Yilun MEDIUM priority, bot reports user
                     self.log['severity'] = 'Medium'
-                await self.handle_report(self.log, self.reported_user_information)
+                await self.handle_report(self.log, self.reported_user_information, is_bot=True)
 
     def record_report(self):
+
         if self.log['reported_user'].id not in self.reported_user_information:
             self.reported_user_information[self.log['reported_user'].id] = {}
             self.reported_user_information[self.log['reported_user'].id]['num_report'] = 0
@@ -295,24 +301,30 @@ class ModBot(discord.Client):
                     await message.delete()
 
         # Forward the message to the mod channel
-        await self.mod_channel.send(f'Forwarded message:\n{message.author.name}: "{message.content}"')
-        scores = self.eval_text(message.content)
-        await self.mod_channel.send(self.code_format(scores))
+        # await self.mod_channel.send(f'Forwarded message:\n{message.author.name}: "{message.content}"')
+        # scores = self.eval_text(message.content)
+        # await self.mod_channel.send(self.code_format(scores))
 
-    async def handle_report(self, report_information, reported_user_information, fake_user=None):
+    async def handle_report(self, report_information, reported_user_information, is_bot=False):
         
-        if is_debug(): report_information, reported_user_information = encode_fake_information(report_information, reported_user_information, fake_user)
-        
-        report_information['reported_score'] = 'N/A'
+        if 'reported_score' not in report_information: 
+            reported_message = report_information['reported_message']
+            category_id = report_information['category_id']
+            report_information['reported_score'] = ai_score(reported_message, category_id)
+                           
         report_information['reported_user_state'] = BadUserState.NONE
 
         try:
             reported_user_id = report_information['reported_user'].id
+            user_data = get_user_data_firebase(report_information['reported_user'].id) # TODO: Matt firebase
+
+            # TODO: replace with user_data information
+
             report_information['reported_user_state'] = self.bad_users[reported_user_id]['state']
         except:
             pass
 
-        await handle_report_helper(report_information, reported_user_information, client)
+        await handle_report_helper(report_information, reported_user_information, client, is_bot=is_bot)
 
     async def handle_unmatch_command(self, message):
         await handle_unmatch_command_helper(message, self)      

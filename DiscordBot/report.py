@@ -166,12 +166,13 @@ class Report:
             self.state = State.MESSAGE_IDENTIFIED
             reply = ["I found this message:", "```" + message.author.name + ": " + message.content + "```", \
                     "Please select the reason for reporting this user/this message(1-5): \n"]
+            
             self.log['reported_user'] = message.author
             self.log['reported_message'] = message.content
             self.log['reported_thread'] = thread.name
             self.log['reported_url'] = link
-            self.log['severity'] = 'Medium'
-            # self.log['thread_id'] = thread.id
+            self.log['severity'] = 'Low'
+
             for i, reason in enumerate(self.report_type):
                 reply[-1] += (str(i+1) + '. '+ reason+'\n')
             return reply
@@ -179,11 +180,13 @@ class Report:
         if self.state == State.MESSAGE_IDENTIFIED:
             if self.reason == []:
                 if message.content in ['1','2','3','4','5']:
-                    self.log['user'] = message.author
                     self.reason.append(message.content)
+                    
+                    self.log['user'] = message.author
                     self.log['reason'] = [self.report_type[int(message.content)-1]]
                     self.log['reported_category'] = self.report_type[int(message.content)-1]
                     self.log['category_id'] = int(message.content)
+
                     steps = self.report_content[self.report_type[int(message.content)-1]][0]
                     reply = ''
                     for index in range(len(steps)):
@@ -195,7 +198,6 @@ class Report:
                 else:
                     return ["Please select the reason for reporting this user/this message(1-5)"]
             elif self.reason[0] == '3':
-                self.log['severity'] = 'High'
                 if len(self.reason) == 1 and message.content in ['2','3']:
                     self.reason.append(int(message.content))
                     # self.log['reason'].append(self.report_content['Scam/Catfishing'][int(message.content)-1][0])

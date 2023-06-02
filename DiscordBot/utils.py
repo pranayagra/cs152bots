@@ -75,7 +75,8 @@ def ai_score(message, category):
 '''With what probability does the below message from a user indicate that %s?
 Pick a number 0-100. Do not respond with anything else.
 
-Message: %s''' % (reporting_categories[category-1], message)
+Message: %s
+Score: ''' % (reporting_categories[category-1], message)
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
@@ -84,6 +85,7 @@ Message: %s''' % (reporting_categories[category-1], message)
             ]
     )
     score = response['choices'][0]['message']['content']
+    # print('AI SCORE RAW: ', score)
     score = re.findall(r'\d+', score)
     if score:
         return int(score[-1])
@@ -159,13 +161,30 @@ def replace_unicode_from_text(text):
     except:
         return text
 
-if __name__ == '__main__':
-    # ai_links('https://pornhub.com https://drugs.com')
-    msg = 'im a bot'
-    # msg = 'im am 19 yrs old'
-    # msg = 'pay me 100 on Venmo'
-    # msg = 'my mom needs money'
-    # cat = message_autoflag(msg)
-    # print(cat)
-    # score = ai_score(msg, cat)
-    # print(score)
+
+# MATT STUFF
+
+def update_ticket_firebase(ticket_id, ticket):
+    '''
+    updates key ticket_id with value as ticket to firebase database, or adds to firebase database if it does not exist
+    ticket_id: int
+    ticket: class Ticket
+    '''
+    pass
+    
+
+def get_user_data_firebase(user_id):
+    '''
+    returns user data for user_id from firebase database
+    user_id: int
+    returns: dictionary for user_id with data [username, num_warnings, num_suspends, num_reports_made, num_reports_against, is_banned, is_verified_account]
+    '''
+    return {}
+
+def add_match_request_firebase(user_id1, user_id2):
+    '''
+    adds a match request to firebase database
+    user_id1: int
+    user_id2: int
+    '''
+    pass

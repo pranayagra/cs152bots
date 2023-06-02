@@ -35,6 +35,7 @@ class MatchRequestView:
 
             if not self.client.matches.is_match(self.user1, self.user2):
                 self.client.matches.add_match_request(self.user2, self.user1)
+                add_match_request_firebase(self.user2.id, self.user1.id) #TODO: Matt, add this function
                 match_information = self.client.matches.get_match(self.user1, self.user2)
                 await match_information.create_thread(self.client)
 
@@ -176,6 +177,7 @@ async def handle_match_command_helper(message, client):
     if await check_issue(client.matches.is_match_request(user1, user2), user1.send, f'You have already sent a match request to {user2.mention}.'): return
 
     client.matches.add_match_request(user1, user2)
+    add_match_request_firebase(user1.id, user2.id) #TODO: Matt, add this function
 
     # if user2 has not already sent user1 a match request, send a match request to user2
     if not client.matches.is_match_request(user2, user1):

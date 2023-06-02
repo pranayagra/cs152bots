@@ -64,6 +64,17 @@ class TicketAppealState(Enum):
     APPEAL_ACCEPTED = auto()
     APPEAL_REJECTED = auto()
 
+
+'''
+report_information = {
+    'user': user,
+    'reported_user': reported_user,
+    'reported_user_state': reported_user_state,
+    'category_id': category_id
+
+}
+'''
+
 class Ticket:
     def __init__(self, report_information, reported_user_information, is_bot = False):
         self.report_information = report_information
@@ -86,7 +97,7 @@ class Ticket:
         
         self.mod_thread_name = f"mod-ticket-{self.reporter}-{self.suspect}"
         self.mod_thread = None # created soon after ticket is created
-        self.mod_thread_id = None # created soon after ticket is created
+        self.mod_thread_id = None # created soon after ticket is created (ID)
 
         self.reporter_thread_name = f"reporter-ticket-{self.reporter}-{self.suspect}"
         self.reporter_thread = None # created upon button press
@@ -219,12 +230,14 @@ def accept_report_workflow(ticket):
     return interaction_message, reporter_message, suspect_message, action
 
 
-async def handle_report_helper(report_information, reported_user_information, client):
+async def handle_report_helper(report_information, reported_user_information, client, is_bot=False):
     unclaimed_view = UnclaimedView()
     claimed_view = ClaimedView()
 
-    ticket = Ticket(report_information, reported_user_information)
+    ticket = Ticket(report_information, reported_user_information, is_bot)
     await ticket.create_mod_thread(client)
+
+    update_ticket_firebase(ticket.mod_thread_id, ticket) # TODO: Matt firebase
 
     ticket.main_message = await ticket.mod_thread.send(content=ticket.main_content(), view=unclaimed_view.view())
 
