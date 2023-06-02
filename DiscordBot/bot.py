@@ -17,6 +17,8 @@ from utils import *
 from mod_report import *
 from match import *
 from appeal_report import *
+import pickle as pkl
+from datetime import date
 
 # user database: {user_id: [username, num_warnings, num_suspends, num_reports]}
 
@@ -54,7 +56,21 @@ class ModBot(discord.Client):
         self.matches = Match()
         self.bad_users = {}
         self.appealed_tickets = set()
-        self.banned_word = []
+        self.log = {}
+        self.read_user_information()
+
+        if os.path.exists('all_banned_word.pkl'):
+            with open('all_banned_word.pkl', 'rb') as handle:
+                self.banned_word = pkl.load(handle)
+        else:
+            self.banned_word = []
+    
+    def read_user_information(self):
+        if os.path.exists('reported_user_info.pkl'):
+            with open('reported_user_info.pkl', 'rb') as handle:
+                self.reported_user_information = pkl.load(handle)
+        else:
+            self.reported_user_information = {}
 
     async def username_to_user(self, username):
         name = self.guild.get_member_named(username)
@@ -109,7 +125,7 @@ class ModBot(discord.Client):
         content = content.lower()
 
         print(f"Received message (fixed): {content}")
-        return
+        # return
 
         # AI LINK STUFF
         has_bad_link = has_bad_links(content)
@@ -123,13 +139,46 @@ class ModBot(discord.Client):
         if category != 5:
             print(f"Autoflagged message as {category}")
             score = ai_score(content, category)
-            print(f"AI score: {score}")            
-            if score >= 90:
-                pass
-                # TODO: Yilun HIGH priority, bot reports user
-            elif score >= 50:
-                pass
-                # TODO: Yilun MEDIUM priority, bot reports user
+            print(f"AI score: {score}")     
+
+            link = message.content
+            m = re.search('/(\d+)/(\d+)/(\d+)', link)     
+            # thread = self.main_channel.get_thread(int(m.group(2)))
+            self.log['reported_user'] = message.author
+            self.log['reported_message'] = message.content
+            # self.log['reported_thread'] = thread.name
+            self.log['reported_url'] = link
+            self.log['user'] = self.user
+            self.log['reason'] = [category]
+            self.log['reported_category'] = category
+            self.log['category_id'] = category
+            self.log['unmatch'] = False
+            self.record_report()
+            if score is not None:
+                if score >= 90:
+                    # TODO: Yilun HIGH priority, bot reports user
+                    self.log['severity'] = 'High'
+                elif score >= 50:
+                    # TODO: Yilun MEDIUM priority, bot reports user
+                    self.log['severity'] = 'Medium'
+                await self.handle_report(self.log, self.reported_user_information)
+
+    def record_report(self):
+        if self.log['reported_user'].id not in self.reported_user_information:
+            self.reported_user_information[self.log['reported_user'].id] = {}
+            self.reported_user_information[self.log['reported_user'].id]['num_report'] = 0
+            self.reported_user_information[self.log['reported_user'].id]['warned'] = 0
+        self.reported_user_information[self.log['reported_user'].id]['num_report'] +=1
+        self.reported_user_information[self.log['reported_user'].id]['warned'] +=1
+        self.reported_user_information[self.log['reported_user'].id]['last_report'] = date.today()
+
+        suspect_id = self.log['reported_user'].id
+        if suspect_id not in self.bad_users:
+            self.bad_users[suspect_id] = {'state': BadUserState.NONE}
+
+        print(self.reported_user_information)
+        with open('reported_user_info.pkl', 'wb') as handle:
+            pkl.dump(self.reported_user_information, handle)
 
     async def on_message_edit(self, before, after):
         if before.content != after.content:
@@ -209,20 +258,36 @@ class ModBot(discord.Client):
         if message.channel.name == f'group-{self.group_num}-mod':
             # sending message to mod channel, patterns contains:
             # 1. ban xxx, remove ban xxx
-            if message.content.startswith('ban'):
+            if message.content.startswith('regex add'):
                 # banning a word
-                banned_word_index = message.content.index('ban')+4
+                print("banning")
+                banned_word_index = message.content.index('add')+4
                 banned_word = message.content[banned_word_index:]
                 self.banned_word.append(banned_word)
+                with open('all_banned_word.pkl', 'wb') as handle:
+                    pkl.dump(self.banned_word, handle)
                 await self.mod_channel.send(banned_word +' is banned')
-            elif message.content.startswith('remove'):
+            elif message.content.startswith('regex remove'):
                 # removing ban of a word
-                banned_word_index = message.content.index('ban')+4
+                print("removing ban")
+                banned_word_index = message.content.index('remove')+7
                 banned_word = message.content[banned_word_index:]
                 self.banned_word.remove(banned_word)
+                with open('all_banned_word.pkl', 'wb') as handle:
+                    pkl.dump(self.banned_word, handle)
                 await self.mod_channel.send(banned_word+ ' ban is removed')
+            elif message.content.startswith('regex list'):
+                # listing all banned words
+                print("listing ban")
+                if len(self.banned_word) == 0:
+                    await self.mod_channel.send("There are no banned words")
+                else:
+                    reply = 'The banned words are: '
+                    for word in self.banned_word:
+                        reply += (word+' ')
+                    await self.mod_channel.send(reply)
             else:
-                await self.mod_channel.send(f'You are sending message to mod channel')
+                await self.mod_channel.send(f'You are sending message to mod channel, please send regex related command')
             return
         if not message.channel.name == f'group-{self.group_num}':
             for banned_word in self.banned_word:
