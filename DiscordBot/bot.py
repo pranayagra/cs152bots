@@ -157,8 +157,8 @@ class ModBot(discord.Client):
             self.log['reported_thread'] = thread.name
             self.log['reported_url'] = link
             self.log['user'] = self.user
-            self.log['reason'] = reporting_categories[category]
-            self.log['reported_category'] = reporting_categories[category]
+            self.log['reason'] = reporting_categories[category - 1]
+            self.log['reported_category'] = reporting_categories[category - 1]
             self.log['category_id'] = category
             self.log['unmatch'] = False
             self.log['reported_score'] = score
