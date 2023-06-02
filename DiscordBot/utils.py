@@ -79,13 +79,13 @@ Message: %s''' % (reporting_categories[category-1], message)
         model="gpt-3.5-turbo",
         messages=[
                 {"role": "system", "content": "You are a helpful assistant for trust and safety engineering on a dating app"},
-                {"role": "user", "content": prompt + message},
+                {"role": "user", "content": prompt},
             ]
     )
     score = response['choices'][0]['message']['content']
     score = re.findall(r'\d+', score)
     if score:
-        return score[-1]
+        return int(score[-1])
     else:
         50
 
@@ -95,16 +95,39 @@ class BadUserState(Enum):
     NONE = auto()
 
 
-def ai_links(message):
-    urls = text_to_urls(message.content)
+def has_bad_links(message):
+    urls = text_to_urls(message)
     for url in urls:
         try:
             text = url_to_text(url)
             if text is None: continue
             # use AI to categorize text
+            prompt = \
+'''Does the below message fall into any of the below categories:
+1. Spam
+2. Harassment
+3. Scam/catfishing
+4. Imminent danger
+5. Illegal or inappropriate content
+
+Message: %s
+
+Answer yes/no. Do not respond with anything else.''' % (message)
+            response = openai.ChatCompletion.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                        {"role": "system", "content": "You are a helpful assistant for trust and safety engineering on a dating app"},
+                        {"role": "user", "content": prompt},
+                    ]
+            )
+            response = response['choices'][0]['message']['content']
+            print(response)
+            if 'yes' in response.lower():
+                return 1
 
         except:
             pass
+    return 0
             
 def tag_visible(element):
     if element.parent.name in ['style', 'script', 'head', 'title', 'meta', '[document]']:
@@ -130,11 +153,12 @@ def url_to_text(url):
         pass
 
 if __name__ == '__main__':
-    # msg = 'im a bot'
+    # ai_links('https://pornhub.com https://drugs.com')
+    msg = 'im a bot'
     # msg = 'im am 19 yrs old'
     # msg = 'pay me 100 on Venmo'
-    msg = 'my mom needs money'
-    cat = message_autoflag(msg)
-    print(cat)
-    score = ai_score(msg, cat)
-    print(score)
+    # msg = 'my mom needs money'
+    # cat = message_autoflag(msg)
+    # print(cat)
+    # score = ai_score(msg, cat)
+    # print(score)
