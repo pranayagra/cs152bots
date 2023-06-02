@@ -75,6 +75,7 @@ report_information = {
 }
 '''
 
+# Should accepted, rejected, appealed, successful appeal be added?
 class Ticket:
     def __init__(self, report_information, reported_user_information, is_bot = False):
         self.report_information = report_information
