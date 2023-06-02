@@ -82,7 +82,6 @@ class Ticket:
         self.is_bot = is_bot
         self.has_been_warned = report_information['reported_user_state'] == BadUserState.WARN # TODO: Matt replace with user-data database
 
-        
         self.main_message = None # created soon after ticket is created
         self.main_message_text = format_ticket_message(report_information)
 

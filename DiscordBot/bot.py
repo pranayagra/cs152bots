@@ -316,7 +316,7 @@ class ModBot(discord.Client):
 
         try:
             reported_user_id = report_information['reported_user'].id
-            user_data = get_user_data_firebase(report_information['reported_user'].id) # TODO: Matt firebase
+            user_data = get_user_data_firebase(reported_user_id) # TODO: Matt firebase
 
             # TODO: replace with user_data information
 

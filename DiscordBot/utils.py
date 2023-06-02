@@ -55,7 +55,8 @@ def message_autoflag(message):
 4. %s
 5. none
 
-Message: %s''' % (reporting_categories[0], reporting_categories[1], reporting_categories[2], reporting_categories[3], message)
+Message: %s
+Number: ''' % (reporting_categories[0], reporting_categories[1], reporting_categories[2], reporting_categories[3], message)
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[

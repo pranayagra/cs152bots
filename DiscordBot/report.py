@@ -7,35 +7,6 @@ from datetime import date
 import pickle as pkl
 from enum import Enum, auto
 from utils import *
-# class PersistentInformation:
-#     def __init__(self):
-#         self.all_report_information = {}
-
-#     def add_ticket(self, suspect, ticket_id, ticket_information):
-#         if suspect.id not in self.all_report_information:
-#             self.all_report_information[suspect.id] = {}
-        
-#         suspect_report_information = self.all_report_information[suspect.id]
-
-#         if ticket_id not in suspect_report_information:
-#             suspect_report_information[ticket_id] = {}
-        
-#         suspect_ticket_information = suspect_report_information[ticket_id]
-
-#         suspect_ticket_information['reporter'] = ticket_information['reporter']
-#         suspect_ticket_information['reason'] = ticket_information['reason']
-#         suspect_ticket_information['state'] = ticket_information['state']
-#         suspect_ticket_information['date'] = ticket_information['date']
-#         suspect_ticket_information['mod_action'] = ticket_information['mod_action']
-#         suspect_ticket_information['appeal'] = ticket_information['appeal']
-
-#     def num_reports(self, suspect):
-#         if suspect.id not in self.all_report_information:
-#             return 0
-#         return len(self.all_report_information[suspect.id])
-
-#     # user.id => {ticket.id: {}, ticket.id: {}}
-#     def save_user_information(self, user_id, user_name, user_discriminator, user_avatar):
 
 class State(Enum):
     REPORT_START = auto()
