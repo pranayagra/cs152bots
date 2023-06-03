@@ -84,12 +84,13 @@ class ModBot(discord.Client):
         self.read_user_information()
         self.mod_tickets = {}
 
-        if os.path.exists('all_banned_word.pkl'):
-            with open('all_banned_word.pkl', 'rb') as handle:
-                self.banned_word = pkl.load(handle)
-                #TODO(yih301): use fetch_banned_words instead don't load from a file
-        else:
-            self.banned_word = []
+        # if os.path.exists('all_banned_word.pkl'):
+        #     with open('all_banned_word.pkl', 'rb') as handle:
+        #         self.banned_word = pkl.load(handle)
+        #         #TODO(yih301): use fetch_banned_words instead don't load from a file
+        # else:
+        #     self.banned_word = []
+        self.banned_word = fetch_banned_words()
     
     def read_user_information(self):
         if os.path.exists('reported_user_info.pkl'):
@@ -311,9 +312,10 @@ class ModBot(discord.Client):
                 banned_word_index = message.content.index('add')+4
                 banned_word = message.content[banned_word_index:]
                 self.banned_word.append(banned_word)
-                # TODO(yih301): add in firebase with add_banned_word()
-                with open('all_banned_word.pkl', 'wb') as handle:
-                    pkl.dump(self.banned_word, handle)
+                # # TODO(yih301): add in firebase with add_banned_word()
+                # with open('all_banned_word.pkl', 'wb') as handle:
+                #     pkl.dump(self.banned_word, handle)
+                add_banned_word(banned_word)
                 await self.mod_channel.send(banned_word +' is banned')
             elif message.content.startswith('regex remove'):
                 # removing ban of a word
@@ -322,8 +324,9 @@ class ModBot(discord.Client):
                 banned_word = message.content[banned_word_index:]
                 self.banned_word.remove(banned_word)
                 # TODO(yih301): remove from firebase with remove_banned_word()
-                with open('all_banned_word.pkl', 'wb') as handle:
-                    pkl.dump(self.banned_word, handle)
+                # with open('all_banned_word.pkl', 'wb') as handle:
+                #     pkl.dump(self.banned_word, handle)
+                remove_banned_word(banned_word)
                 await self.mod_channel.send(banned_word+ ' ban is removed')
             elif message.content.startswith('regex list'):
                 # listing all banned words
