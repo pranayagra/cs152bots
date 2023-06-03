@@ -1,3 +1,9 @@
 requests
 discord.py
 numpy
+pandas
+unidecode
+bs4
+firebase_admin
+scikit-learn
+seaborn
