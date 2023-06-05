@@ -341,7 +341,6 @@ async def handle_report_helper(report_information, reported_user_information, cl
         await ticket.mod_thread.send(interaction_message)
         await ticket.suspect.send(suspect_message)
         await ticket.suspect.send(f'If this is a mistake, please type `appeal {ticket.mod_thread_id}`.')
-        if reporter_message: await ticket.reporter.send(reporter_message)
 
         bad_user = client.bad_users[ticket.suspect.id]
         bad_user[ticket.mod_thread_id] = ticket

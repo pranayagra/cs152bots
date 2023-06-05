@@ -135,42 +135,80 @@ class ModBot(discord.Client):
         print(f"Received message (fixed): {content}")
         # return
 
+        # AI IMAGE STUFF
+        images = await message_to_images(message)
+        if len(images): 
+            captions = images_to_captions(images)
+            print(f"Received images (captioned): {captions}")
+            for caption in captions:
+                category = message_autoflag(caption)
+                print(f"Autoflagged image `{caption}` as {category}")
+                if category != 5:
+                    print(f"Autoflagged image as {category}")
+                    score = ai_score(caption, category)
+                    print(f"AI score: {score}")
+
+                    link = message.jump_url
+                    m = re.search('/(\d+)/(\d+)/(\d+)', link)   
+                    thread = self.main_channel.get_thread(int(m.group(2)))
+                    self.log['reported_user'] = message.author
+                    self.log['reported_message'] = caption
+                    self.log['reported_thread'] = thread.name
+                    self.log['reported_url'] = link
+                    self.log['user'] = self.user
+                    self.log['reason'] = reporting_categories[category - 1]
+                    self.log['reported_category'] = reporting_categories[category - 1]
+                    self.log['category_id'] = category
+                    self.log['unmatch'] = False
+                    self.log['reported_score'] = score
+                    self.record_report()
+                    if score is not None and score >= 50:
+                        if score >= 90:
+                            # TODO: Yilun HIGH priority, bot reports user
+                            self.log['severity'] = 'High'
+                        elif score >= 50:
+                            # TODO: Yilun MEDIUM priority, bot reports user
+                            self.log['severity'] = 'Medium'
+                        await self.handle_report(self.log, self.reported_user_information, is_bot=True)
+
         # AI LINK STUFF
-        has_bad_link = has_bad_links(content)
-        if has_bad_link:
-            await message.delete()
-            await message.author.send('Your message was deleted because it contained a link to a bad website. Please do not post links containing undesirable content.')
-            # TODO: increment counter in database, if counter >= 5, suspend user (and user can appeal)
+        if content:
+            has_bad_link = has_bad_links(content)
+            if has_bad_link:
+                await message.delete()
+                await message.author.send('Your message was deleted because it contained a link to a bad website. Please do not post links containing undesirable content.')
+                # TODO: increment counter in database, if counter >= 5, suspend user (and user can appeal)
 
         # AI MESSAGE STUFF
-        category = message_autoflag(content)
-        if category != 5:
-            print(f"Autoflagged message as {category}")
-            score = ai_score(content, category)
-            print(f"AI score: {score}")
-             
-            link = message.jump_url
-            m = re.search('/(\d+)/(\d+)/(\d+)', link)   
-            thread = self.main_channel.get_thread(int(m.group(2)))
-            self.log['reported_user'] = message.author
-            self.log['reported_message'] = message.content
-            self.log['reported_thread'] = thread.name
-            self.log['reported_url'] = link
-            self.log['user'] = self.user
-            self.log['reason'] = reporting_categories[category - 1]
-            self.log['reported_category'] = reporting_categories[category - 1]
-            self.log['category_id'] = category
-            self.log['unmatch'] = False
-            self.log['reported_score'] = score
-            self.record_report()
-            if score is not None and score >= 50:
-                if score >= 90:
-                    # TODO: Yilun HIGH priority, bot reports user
-                    self.log['severity'] = 'High'
-                elif score >= 50:
-                    # TODO: Yilun MEDIUM priority, bot reports user
-                    self.log['severity'] = 'Medium'
-                await self.handle_report(self.log, self.reported_user_information, is_bot=True)
+        if content:
+            category = message_autoflag(content)
+            if category != 5:
+                print(f"Autoflagged message as {category}")
+                score = ai_score(content, category)
+                print(f"AI score: {score}")
+                
+                link = message.jump_url
+                m = re.search('/(\d+)/(\d+)/(\d+)', link)   
+                thread = self.main_channel.get_thread(int(m.group(2)))
+                self.log['reported_user'] = message.author
+                self.log['reported_message'] = message.content
+                self.log['reported_thread'] = thread.name
+                self.log['reported_url'] = link
+                self.log['user'] = self.user
+                self.log['reason'] = reporting_categories[category - 1]
+                self.log['reported_category'] = reporting_categories[category - 1]
+                self.log['category_id'] = category
+                self.log['unmatch'] = False
+                self.log['reported_score'] = score
+                self.record_report()
+                if score is not None and score >= 50:
+                    if score >= 90:
+                        # TODO: Yilun HIGH priority, bot reports user
+                        self.log['severity'] = 'High'
+                    elif score >= 50:
+                        # TODO: Yilun MEDIUM priority, bot reports user
+                        self.log['severity'] = 'Medium'
+                    await self.handle_report(self.log, self.reported_user_information, is_bot=True)
 
     def record_report(self):
 

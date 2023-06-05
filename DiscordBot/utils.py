@@ -6,11 +6,17 @@ import re
 from bs4 import BeautifulSoup
 from bs4.element import Comment
 import urllib.request
+import urllib
 import openai
 import os
 import json
 import requests
 from unidecode import unidecode
+import numpy as np
+from PIL import Image
+import io
+from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoTokenizer
+import torch
 
 token_path = 'tokens.json'
 if not os.path.isfile(token_path):
@@ -162,6 +168,35 @@ def replace_unicode_from_text(text):
     except:
         return text
 
+async def message_to_images(message):
+    images = []
+
+    for attachment in message.attachments:
+        if attachment.filename.endswith(".jpg") or attachment.filename.endswith(".jpeg") or attachment.filename.endswith(".png") or attachment.filename.endswith(".webp") or attachment.filename.endswith(".gif"):
+            print(attachment.url)
+            image_data = await attachment.read()
+            image = Image.open(io.BytesIO(image_data))
+            if image.mode != "RGB":
+                image = image.convert(mode="RGB")
+            images.append(image)
+    return images
+
+def images_to_captions(images):
+    from transformers import BlipProcessor, BlipForConditionalGeneration
+
+    processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+    model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+
+    captions = []
+    for image in images:
+        inputs = processor(image, return_tensors="pt")
+
+        out = model.generate(**inputs)
+        caption = processor.decode(out[0], skip_special_tokens=True)
+        captions.append(caption)
+    return captions
+
+                        
 
 # MATT STUFF
 
