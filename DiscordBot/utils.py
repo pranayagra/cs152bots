@@ -90,10 +90,10 @@ def ai_score(message, category):
     assert category in [1, 2, 3, 4]
     prompt = \
 '''With what probability does the below message from a user indicate that %s?
+Pick a number 0-100. Do NOT respond with anything else.
 
 Message: %s
-Pick a number 0-100. Do NOT respond with anything else.
-Probability: ''' % (reporting_categories[category-1], message)
+Score: ''' % (reporting_categories[category-1], message)
     
     try:
         response = openai.ChatCompletion.create(

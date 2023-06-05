@@ -171,7 +171,6 @@ class ModBot(discord.Client):
         content = content.lower()
 
         print(f"Received message (fixed): {content}")
-        # return
 
         # AI IMAGE STUFF
         images = await message_to_images(message)
@@ -213,10 +212,22 @@ class ModBot(discord.Client):
         if content:
             has_bad_link = has_bad_links(content)
             if has_bad_link:
+                update_user_attribute_firebase(message.author.id, 'num_warnings', increment=True)
+                num_warnings = get_user_attribute_firebase(message.author.id, 'num_warnings')
                 await message.delete()
                 await message.author.send('Your message was deleted because it contained a link to a bad website. Please do not post links containing undesirable content.')
-                # TODO: increment counter in database, if counter >= 5, suspend user (and user can appeal)
-
+                await message.author.send('This is your ' + str(num_warnings) + ' warning. If you receive 5 warnings, you will be suspended.')                
+                if num_warnings >= 5:
+                    await message.author.send('You have been suspended for posting links to bad websites.')       
+                    for thread in client.main_channel.threads:
+                        try:
+                            await thread.fetch_member(message.author.id)
+                            if thread.name.startswith('appeal-'): continue
+                            await thread.edit(locked=True)
+                            await thread.send(f'User {message.author.mention} has been suspended.')
+                        except:
+                            pass    
+                    
         # AI MESSAGE STUFF
         if content:
             category = message_autoflag(content)
@@ -382,12 +393,8 @@ class ModBot(discord.Client):
         if not message.channel.name == f'group-{self.group_num}':
             for banned_word in self.banned_word:
                 if banned_word in message.content:
+                    await message.author.send(f'Your message contains banned word: `{banned_word}`. Please refrain from using this word.')
                     await message.delete()
-
-        # Forward the message to the mod channel
-        # await self.mod_channel.send(f'Forwarded message:\n{message.author.name}: "{message.content}"')
-        # scores = self.eval_text(message.content)
-        # await self.mod_channel.send(self.code_format(scores))
 
     async def handle_report(self, report_information, reported_user_information, is_bot=False):
         
@@ -419,23 +426,7 @@ class ModBot(discord.Client):
     async def handle_appeal_command(self, message):
         await handle_appeal_command_helper(message, self)
 
-    def eval_text(self, message):
-        ''''
-        TODO: Once you know how you want to evaluate messages in your channel, 
-        insert your code here! This will primarily be used in Milestone 3. 
-        '''
-        return message
-
-    
-    def code_format(self, text):
-        ''''
-        TODO: Once you know how you want to show that a message has been 
-        evaluated, insert your code here for formatting the string to be 
-        shown in the mod channel. 
-        '''
-        return "Evaluated: '" + text+ "'"
 
 
 client = ModBot()
-
 client.run(discord_token)
