@@ -17,6 +17,16 @@ from PIL import Image
 import io
 from transformers import VisionEncoderDecoderModel, ViTImageProcessor, AutoTokenizer
 import torch
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import firestore
+
+
+# Use a global variable to store the Firebase app instance
+if not firebase_admin._apps:
+    cred = credentials.Certificate('cs152-30e28-firebase-adminsdk-a4oyb-711a91d46d.json')
+    firebase_admin.initialize_app(cred)
+db = firestore.client()
 
 token_path = 'tokens.json'
 if not os.path.isfile(token_path):
@@ -199,15 +209,34 @@ def images_to_captions(images):
                         
 
 # MATT STUFF
+# Firebase Functions
 
 def update_ticket_firebase(ticket_id, ticket):
     '''
-    updates key ticket_id with value as ticket to firebase database, or adds to firebase database if it does not exist
+    updates (or creates) key ticket_id with value as ticket to firebase database, or adds to firebase database if it does not exist
     ticket_id: int
     ticket: class Ticket
     '''
-    pass
-    
+    db.collection('all_tickets').document(str(ticket_id)).set(ticket.to_dict(), merge=True)
+
+def create_user_data_in_firebase(user_id, user_data):
+    '''
+    adds user_data to firebase database with user_id as key
+    Current Structure:
+    Collection("users").document(user_id).collection("data").document("userData")
+    '''
+    db.collection('users').document(str(user_id)).collection('data').document('userData').set(user_data.to_dict())
+    return
+
+# TODO(Pranay): to use this function
+def update_user_data_in_firebase(user_id, user_data):
+    '''
+    updates user_data in firebase database with user_id as key
+    Current Structure:
+    Collection("users").document(user_id).collection("data").document("userData")
+    '''
+    db.collection('users').document(str(user_id)).collection('data').document('userData').set(user_data.to_dict(), merge=True)
+   
 
 def get_user_data_firebase(user_id):
     '''
@@ -215,7 +244,12 @@ def get_user_data_firebase(user_id):
     user_id: int
     returns: dictionary for user_id with data [username, num_warnings, num_suspends, num_reports_made, num_reports_against, is_banned, is_verified_account]
     '''
-    return {}
+    doc = db.collection('users').document(str(user_id)).collection('data').document('userData').get()
+    if doc.exists:
+        return doc.to_dict()
+    else:
+        print("user does not exist")
+        return {}
 
 def add_match_request_firebase(user_id1, user_id2):
     '''
@@ -223,4 +257,120 @@ def add_match_request_firebase(user_id1, user_id2):
     user_id1: int
     user_id2: int
     '''
-    pass
+    # Create a reference to the matches documents for both users
+    doc_ref1 = db.collection('users').document(str(user_id1)).collection('data').document('matches')
+    doc_ref2 = db.collection('users').document(str(user_id2)).collection('data').document('matches')
+
+    # Get the current state of the matches documents
+    doc1 = doc_ref1.get()
+    doc2 = doc_ref2.get()
+
+    if doc1.exists:
+        # If the matches document exists for user_id1, append user_id2
+        doc_ref1.update({'matched_ids': firestore.ArrayUnion([user_id2])})
+    else:
+        # If the matches document does not exist for user_id1, create it with user_id2
+        doc_ref1.set({'matched_ids': [user_id2]})
+
+    if doc2.exists:
+        # If the matches document exists for user_id2, append user_id1
+        doc_ref2.update({'matched_ids': firestore.ArrayUnion([user_id1])})
+    else:
+        # If the matches document does not exist for user_id2, create it with user_id1
+        doc_ref2.set({'matched_ids': [user_id1]})
+
+def remove_match_request_firebase(user_id1, user_id2):
+    '''
+    removes a match request from firebase database
+    user_id1: int
+    user_id2: int
+    '''
+    # Create a reference to the matches documents for both users
+    doc_ref1 = db.collection('users').document(str(user_id1)).collection('data').document('matches')
+    doc_ref2 = db.collection('users').document(str(user_id2)).collection('data').document('matches')
+
+    # Get the current state of the matches documents
+    doc1 = doc_ref1.get()
+    doc2 = doc_ref2.get()
+
+    if doc1.exists and user_id2 in doc1.get('matched_ids'):
+        # If the matches document exists for user_id1 and user_id2 is in the list of matches, remove user_id2
+        doc_ref1.update({'matched_ids': firestore.ArrayRemove([user_id2])})
+
+    if doc2.exists and user_id1 in doc2.get('matched_ids'):
+        # If the matches document exists for user_id2 and user_id1 is in the list of matches, remove user_id1
+        doc_ref2.update({'matched_ids': firestore.ArrayRemove([user_id1])})
+
+VALID_ATTRIBUTES = {'username', 'user_id', 'num_warnings', 'num_suspends', 'num_reports_made', 'num_reports_against', 'is_banned', 'is_verified_account'}
+
+def get_user_attribute_firebase(user_id, attribute):
+    '''
+    returns specific attribute from user data for user_id from firebase database
+    user_id: int
+    attribute: str
+    returns: the attribute value for user_id
+    '''
+    if attribute not in VALID_ATTRIBUTES:
+        raise ValueError(f"Invalid attribute: {attribute}")
+    user_data = db.collection('users').document(str(user_id)).collection('data').document('userData').get()
+    if user_data.exists:
+        return user_data.get(attribute)
+    else:
+        return None
+
+def update_user_attribute_firebase(user_id, attribute, value=None, increment=False, decrement=False):
+    '''
+    updates specific attribute in user data for user_id in firebase database
+    user_id: int
+    attribute: str
+    value: value to set or increment/decrement by
+    increment: boolean, if True increment attribute value
+    decrement: boolean, if True decrement attribute value
+    '''
+    if attribute not in VALID_ATTRIBUTES:
+        raise ValueError(f"Invalid attribute: {attribute}")
+    user_ref = db.collection('users').document(str(user_id)).collection('data').document('userData')
+    if increment:
+        user_ref.update({attribute: firestore.Increment(1)})
+    elif decrement:
+        user_ref.update({attribute: firestore.Increment(-1)})
+    elif value:
+        user_ref.update({attribute: value})
+    else:
+        raise ValueError(f"Please specify value, increment, or decrement")
+    return
+
+# usage examples
+# update_user_attribute_firebase(user_id='123', attribute='num_warnings', value=1, increment=True)
+# update_user_attribute_firebase(user_id='123', attribute='is_banned', value=True)
+
+# Regex banned words TODO(yih301): utilize
+def fetch_banned_words():
+    doc_ref = db.collection("general_data").document("banned")
+    doc = doc_ref.get()
+    if doc.exists:
+        return doc.to_dict().get('banned_words', [])
+    else:
+        return []
+    
+def add_banned_word(word):
+    doc_ref = db.collection("general_data").document("banned")
+    doc = doc_ref.get()
+    if doc.exists:
+        doc_ref.update({'banned_words': firestore.ArrayUnion([word])})
+    else:
+        doc_ref.set({'banned_words': [word]})
+
+def remove_banned_word(word):
+    doc_ref = db.collection("general_data").document("banned")
+    doc = doc_ref.get()
+    if doc.exists:
+        doc_ref.update({'banned_words': firestore.ArrayRemove([word])})
+
+
+if __name__ == "__main__":
+    # to test database functions
+    new_user_data = get_user_data_firebase('1024354403773329541')
+    print(new_user_data)
+    update_user_attribute_firebase('1024354403773329541', 'num_warnings', increment=True)
+    print(get_user_attribute_firebase('1024354403773329541', 'num_warnings'))
