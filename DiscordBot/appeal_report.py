@@ -7,7 +7,7 @@ from enum import Enum, auto
 from utils import *
 
 class AppealReportView:
-    def __init__(self, client, mod_thread, appealer, ticket_id):
+    def __init__(self, client, mod_thread, appealer, ticket_id, ticket):
         self.unclaimed_view = UnclaimedAppealView()
         self.claimed_view = ClaimedAppealView()
 
@@ -16,6 +16,10 @@ class AppealReportView:
         self.appealer = appealer
         self.ticket_id = ticket_id
 
+        self.ticket = ticket
+
+        self.category_id = ticket.category_id
+
         self.message = None
         self.claimed_webhook_message = None
 
@@ -23,6 +27,19 @@ class AppealReportView:
         self.appeal_thread = None
 
         self.claim_by = None
+
+    def appeal_thread_message(self):
+        interaction_message = ''
+        if category_id == 1: # user is a bot
+            interaction_message = 'Your account has been suspended for violating our community guidelines'
+        elif category_id == 2: # user is pretending to be someone else
+            interaction_message = 'You have 24 hours to submit a government ID with a photo. If your current pictures accurately represent who you are, no further action is needed. If your current pictures depict someone else, you must change all pictures to reflect genuine pictures of who you are. If you 1) do not submit an ID OR 2) your new pictures do not accurately represent who you are, your account will be suspended.'
+        elif category_id == 3: # user is a minor
+            interaction_message = 'minor'
+        elif category_id == 4: # user is trying to ask for money 
+            interaction_message = 'money'
+        return interaction_message
+
 
     async def create_appeal_thread(self):
         self.appeal_thread = await self.client.main_channel.create_thread(
@@ -34,6 +51,8 @@ class AppealReportView:
 
         await self.appealer.send(f"Appeal Chat Created: {self.appeal_thread.mention}")
         await self.mod_thread.send(f"Appeal Chat Created: {self.appeal_thread.mention}")
+        i_m = self.appeal_thread_message()
+        if i_m: await self.appeal_thread.send(i_m)
 
 
     async def display_view(self):
@@ -146,5 +165,6 @@ async def handle_appeal_command_helper(message, client):
         if await check_issue(True, suspect.send, f"No appeal thread found."): return
     
     client.appealed_tickets.add(ticket_id)
-    appeal_report_view = AppealReportView(client, mod_thread, suspect, ticket_id)
+
+    appeal_report_view = AppealReportView(client, mod_thread, suspect, ticket_id, ticket)
     await appeal_report_view.display_view()
