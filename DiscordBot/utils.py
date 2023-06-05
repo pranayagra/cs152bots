@@ -90,24 +90,32 @@ def ai_score(message, category):
     assert category in [1, 2, 3, 4]
     prompt = \
 '''With what probability does the below message from a user indicate that %s?
-Pick a number 0-100. Do not respond with anything else.
 
 Message: %s
-Score: ''' % (reporting_categories[category-1], message)
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[
-                {"role": "system", "content": "You are a helpful assistant for trust and safety engineering on a dating app"},
-                {"role": "user", "content": prompt},
-            ]
-    )
-    score = response['choices'][0]['message']['content']
-    print('AI SCORE RAW: ', score)
-    score = re.findall(r'\d+', score)
-    if score:
-        return int(score[-1])
-    else:
-        50
+Pick a number 0-100. Do NOT respond with anything else.
+Probability: ''' % (reporting_categories[category-1], message)
+    
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                    {"role": "system", "content": "You are a helpful assistant for trust and safety engineering on a dating app"},
+                    {"role": "user", "content": prompt},
+                ]
+        )
+        score = response['choices'][0]['message']['content']
+        print('AI SCORE RAW: ', score)
+        score = re.findall(r'\d+', score)
+        print('possible scores: ', score)
+        if score:
+            for score_i in score:
+                score_i = int(score_i)
+                if score_i % 5 == 0: return score_i
+            return int(score[0])
+        else:
+            return 50
+    except:
+        return 50
 
 class BadUserState(Enum):
     SUSPEND = auto()

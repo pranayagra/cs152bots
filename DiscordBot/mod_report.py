@@ -275,6 +275,9 @@ async def handle_report_helper(report_information, reported_user_information, cl
     ticket.main_message = await ticket.mod_thread.send(content=ticket.main_content(), view=unclaimed_view.view())
 
     await ticket.mod_thread.send(content=format_reported_user_information(ticket.suspect, reported_user_information)) 
+    
+    update_ticket_firebase(ticket.mod_thread_id, ticket)
+
 
     async def claim_callback(interaction: discord.Interaction):
         if ticket.claimed: return
@@ -289,6 +292,7 @@ async def handle_report_helper(report_information, reported_user_information, cl
         await ticket.main_message.edit(content=ticket.main_content(), view=unclaimed_view.view())
         await interaction.followup.send(f'Ticket claimed by {interaction.user}.')  
         ticket.claimed_webhook_message = await interaction.followup.send(content=f"Ticket Claimed!", view=claimed_view.view(), ephemeral=True)
+        update_ticket_firebase(ticket.mod_thread_id, ticket)
 
     async def unclaim_callback(interaction: discord.Interaction):
         if not ticket.claimed: return
@@ -300,6 +304,7 @@ async def handle_report_helper(report_information, reported_user_information, cl
         await ticket.set_unclaimed()
         await ticket.main_message.edit(content=ticket.main_content(), view=unclaimed_view.view())
         await interaction.followup.send(f'Ticket unclaimed by {interaction.user}.')
+        update_ticket_firebase(ticket.mod_thread_id, ticket)
 
     async def accept_callback(interaction: discord.Interaction):
         if not ticket.claimed: return
@@ -330,7 +335,8 @@ async def handle_report_helper(report_information, reported_user_information, cl
                     await thread.edit(locked=True)
                     await thread.send(f'User {ticket.suspect.mention} has been suspended.')
                 except:
-                    pass            
+                    pass
+        update_ticket_firebase(ticket.mod_thread_id, ticket)            
 
     async def reject_callback(interaction: discord.Interaction):
         if not ticket.claimed: return
@@ -340,7 +346,8 @@ async def handle_report_helper(report_information, reported_user_information, cl
         ticket.action_state = TicketActionState.ACTION_REJECTED
         await ticket.complete_report()
 
-        await interaction.followup.send(f'Ticket marked as false report by {interaction.user}.')             
+        await interaction.followup.send(f'Ticket marked as false report by {interaction.user}.')  
+        update_ticket_firebase(ticket.mod_thread_id, ticket)           
 
     async def create_thread_callback(interaction: discord.Interaction):
         if not ticket.claimed or ticket.reporter_thread: return
@@ -351,11 +358,11 @@ async def handle_report_helper(report_information, reported_user_information, cl
         claimed_view.disable_create_thread_button()
         ticket.claimed_webhook_message = await ticket.claimed_webhook_message.edit(view=claimed_view.view())
         await interaction.followup.send(f'Created private thread with reporter: {ticket.reporter_thread.mention}')
+        update_ticket_firebase(ticket.mod_thread_id, ticket)
 
     unclaimed_view.claim_button.callback = claim_callback
     claimed_view.set_callbacks(create_thread_callback, accept_callback, reject_callback, unclaim_callback) 
 
-    # TODO(Pranay): verify why ticket.ai_score may be none
     if ticket.ai_score and ticket.ai_score >= 90:
         ticket.set_claimed(client.user)
         unclaimed_view.disable_claim_button()
@@ -385,7 +392,8 @@ async def handle_report_helper(report_information, reported_user_information, cl
                     await thread.edit(locked=True)
                     await thread.send(f'User {ticket.suspect.mention} has been suspended.')
                 except:
-                    pass            
+                    pass    
+        update_ticket_firebase(ticket.mod_thread_id, ticket)        
 
 def encode_fake_information(report_information, reported_user_information, fake_user):
     if not report_information and is_debug():
