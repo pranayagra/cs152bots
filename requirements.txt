@@ -1,3 +1,5 @@
 requests
 discord.py
 numpy
+bs4
+Unidecode
