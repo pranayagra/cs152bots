@@ -38,7 +38,7 @@ with open(token_path) as f:
     openai.organization = tokens['openai.organization']
     openai.api_key = tokens['openai.api_key']
 
-DEBUG = True
+DEBUG = False
 
 def is_debug():
     return DEBUG
@@ -218,7 +218,6 @@ def images_to_captions(images):
 
 # MATT STUFF
 # Firebase Functions
-
 def update_ticket_firebase(ticket_id, ticket):
     '''
     updates (or creates) key ticket_id with value as ticket to firebase database, or adds to firebase database if it does not exist

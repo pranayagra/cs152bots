@@ -30,13 +30,13 @@ class AppealReportView:
 
     def appeal_thread_message(self):
         interaction_message = ''
-        if category_id == 1: # user is a bot
+        if self.category_id == 1: # user is a bot
             interaction_message = 'Your account has been suspended for violating our community guidelines'
-        elif category_id == 2: # user is pretending to be someone else
+        elif self.category_id == 2: # user is pretending to be someone else
             interaction_message = 'You have 24 hours to submit a government ID with a photo. If your current pictures accurately represent who you are, no further action is needed. If your current pictures depict someone else, you must change all pictures to reflect genuine pictures of who you are. If you 1) do not submit an ID OR 2) your new pictures do not accurately represent who you are, your account will be suspended.'
-        elif category_id == 3: # user is a minor
+        elif self.category_id == 3: # user is a minor
             interaction_message = 'minor'
-        elif category_id == 4: # user is trying to ask for money 
+        elif self.category_id == 4: # user is trying to ask for money 
             interaction_message = 'money'
         return interaction_message
 

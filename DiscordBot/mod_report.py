@@ -119,14 +119,14 @@ class Ticket:
             'is_bot': self.is_bot,
             'has_been_warned': self.has_been_warned,
             'ai_score': self.ai_score,
-            'main_message': self.main_message,
+            # 'main_message': self.main_message, #####
             'main_message_text': self.main_message_text,
             'reporter_id': self.reporter.id,
             'suspect_id': self.suspect.id,
             'category_id': self.category_id,
             'claimed': self.claimed,
-            'claimed_by': self.claimed_by,
-            'claimed_webhook_message': self.claimed_webhook_message,
+            'claimed_by': str(self.claimed_by), ####
+            # 'claimed_webhook_message': self.claimed_webhook_message, ####
             'mod_thread_name': self.mod_thread_name,
             # 'mod_thread': self.mod_thread,
             'mod_thread_id': self.mod_thread_id,

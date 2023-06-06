@@ -1,14 +1,11 @@
 requests
 discord.py
 numpy
-<<<<<<< HEAD
-bs4
-Unidecode
-=======
 pandas
-unidecode
+Unidecode
 bs4
 firebase_admin
 scikit-learn
 seaborn
->>>>>>> 949d94b98132da628a66c3a0c9554e29dee06f6a
+transformers
+torch
